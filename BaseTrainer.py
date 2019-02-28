@@ -219,7 +219,7 @@ class BaseTrainer(object):
 
             data = data.to(self.device)
             target = target.to(self.device)
-            # 加载数据所用的时间
+            # time for loading data
             data_time.update(time.time() - tic)
 
             # forward calculate
@@ -343,7 +343,7 @@ class BaseTrainer(object):
         resume_path = os.path.join(self.checkpoint_dir, resume_file)
         print("Loading Checkpoint: {} ... ".format(resume_path))
         checkpoint = torch.load(resume_path)
-        self.start_epoch = checkpoint['epoch'] + 1 # 即将开始的epoch 存储的时候是结束时候的epoch
+        self.start_epoch = checkpoint['epoch'] + 1 # to start epoch, save state is epoch when end
         self.monitor_best = checkpoint['monitor_best']
 
         self.model.load_state_dict(checkpoint['state_dict'])
