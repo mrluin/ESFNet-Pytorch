@@ -7,7 +7,7 @@ import numpy as np
     .clone().cpu().numpy()
 '''
 def Accuracy1(pred, label):
-    # for numpy on cpu
+
     pred = pred.detach().cpu().numpy()
     pred = np.argmax(pred, axis=1)
     label = label.cpu().numpy()
@@ -40,7 +40,7 @@ def Accuracy(pred, label):
         return acc
 
 def MIoU1(pred, label, nb_classes):
-    # for numpy on cpu
+
     pred = pred.detach().cpu().numpy()
     pred = np.argmax(pred, axis=1)
     label = label.cpu().numpy()

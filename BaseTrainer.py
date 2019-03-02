@@ -1,6 +1,5 @@
 import os
 import math
-import datetime
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -8,6 +7,7 @@ import torch.nn.init as init
 import time
 from utils.util import AverageMeter, ensure_dir
 from metrics import Accuracy, MIoU
+#from visdom import Visdom
 
 
 class BaseTrainer(object):
@@ -18,6 +18,7 @@ class BaseTrainer(object):
                  train_data_loader,
                  valid_data_loader,
 
+                 visdom,
                  begin_time,
                  resume_file=None,
                  loss_weight=None):
@@ -97,7 +98,8 @@ class BaseTrainer(object):
             self._resume_ckpt(resume_file=resume_file)
 
         # TODO visualization
-
+        # value needed to visualize: loss, metrics[acc, miou], learning_rate
+        self.visdom = visdom
 
     def _device(self, use_gpu, device_id):
 
@@ -162,6 +164,70 @@ class BaseTrainer(object):
 
     def train(self):
 
+        # create panes for training phase for loss metrics learning_rate
+        print("Visualization init ... ...")
+        loss_window = self.visdom.line(
+            X = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            Y = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            opts= dict(title='train_val_loss',
+                       # for different size panes, the result of download is the same!
+                       showlegend=True,
+                       legend=['training_loss', 'valid_loss'],
+                       xtype='linear',
+                       xlabel='epoch',
+                       xtick=True,
+                       xtickstep=10,
+                       ytype='linear',
+                       ylabel='loss',
+                       ytick=True,
+                       )
+        )
+        lr_window = self.visdom.line(
+            X = torch.zeros(1),
+            Y = torch.tensor([self.current_lr]),
+            opts = dict(title = 'learning_rate',
+                        showlegend=True,
+                        legend=['learning_rate'],
+                        xtype='linear',
+                        xlabel='epoch',
+                        xtick=True,
+                        xtickstep=10,
+                        ytype='linear',
+                        ylabel='lr',
+                        ytick=True)
+        )
+        miou_window = self.visdom.line(
+            X = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            Y = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            opts = dict(title='train_val_MIoU',
+                        showlegend=True,
+                        legend=['Train_MIoU', 'Val_MIoU'],
+                        xtype='linear',
+                        xlabel='epoch',
+                        xtick=True,
+                        xtickstep=10,
+                        ytype='linear',
+                        ylabel='MIoU',
+                        ytick=True
+                        )
+        )
+        acc_window = self.visdom.line(
+            X = torch.stack((torch.zeros(1), torch.zeros(1)),1),
+            Y = torch.stack((torch.zeros(1), torch.zeros(1)),1),
+            opts = dict(title='train_val_Accuracy',
+                        showlegend=True,
+                        legend=['Train_Acc', 'Val_Acc'],
+                        xtype='linear',
+                        xlabel='epoch',
+                        xtick=True,
+                        xtickstep=10,
+                        ytype='linear',
+                        ylabel='Accuracy',
+                        ytick=True)
+        )
+
+        print("Loaded, Training !")
+
         epochs = self.config.epochs
         # init weights at first
         self.model.apply(self._weight_init)
@@ -170,6 +236,37 @@ class BaseTrainer(object):
             # get log information of train and evaluation phase
             train_log = self._train_epoch(epoch)
             eval_log = self._eval_epoch(epoch)
+
+            # TODO visualization
+            # for loss
+            self.visdom.line(
+                X = torch.stack((torch.ones(1)*epoch,torch.ones(1)*epoch),1),
+                Y = torch.stack((torch.tensor([train_log.loss]),torch.tensor([eval_log.val_Loss])),1),
+                win = loss_window,
+                update='append',
+            )
+            # for learning_rate
+            self.visdom.line(
+                X = torch.ones(1)*epoch,
+                Y = torch.tensor([self.current_lr]),
+                win = lr_window,
+                update='append',
+            )
+            # for metrics_miou
+            self.visdom.line(
+                X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
+                Y = torch.stack((torch.tensor([train_log.miou]), torch.tensor([eval_log.val_MIoU])),1),
+                win = miou_window,
+                update='append',
+            )
+            # for metrics_accuracy
+            self.visdom.line(
+                X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
+                Y = torch.stack((torch.tensor([train_log.acc]), torch.tensor([eval_log.val_Accuracy])),1),
+                win = acc_window,
+                update='append',
+            )
+
 
             # save best model and save ckpt
             best = False
@@ -219,7 +316,7 @@ class BaseTrainer(object):
 
             data = data.to(self.device)
             target = target.to(self.device)
-            # time for loading data
+            # 加载数据所用的时间
             data_time.update(time.time() - tic)
 
             # forward calculate
@@ -235,7 +332,6 @@ class BaseTrainer(object):
 
             # update average metrics
             batch_time.update(time.time() - tic)
-            tic = time.time()
             ave_total_loss.update(loss.data.item())
             ave_acc.update(acc.item())
             ave_iou.update(miou.item())
@@ -250,6 +346,7 @@ class BaseTrainer(object):
                               self.current_lr,
                               batch_time.average(), data_time.average(),
                               ave_iou.average(), ave_acc.average(), ave_total_loss.average()))
+            tic = time.time()
         #  train log and return
         self.history['train']['epoch'].append(epoch)
         self.history['train']['loss'].append(ave_total_loss.average())
@@ -291,11 +388,11 @@ class BaseTrainer(object):
 
                 # update ave metrics
                 batch_time.update(time.time()-tic)
-                tic = time.time()
+
                 ave_total_loss.update(loss.data.item())
                 ave_acc.update(acc.item())
                 ave_iou.update(miou.item())
-
+                tic = time.time()
             # display validation at the end
             print('Epoch {} validation done !'.format(epoch))
             print('Time: {:.4f},       Data:     {:.4f},\n'
@@ -343,7 +440,7 @@ class BaseTrainer(object):
         resume_path = os.path.join(self.checkpoint_dir, resume_file)
         print("Loading Checkpoint: {} ... ".format(resume_path))
         checkpoint = torch.load(resume_path)
-        self.start_epoch = checkpoint['epoch'] + 1 # to start epoch, save state is epoch when end
+        self.start_epoch = checkpoint['epoch'] + 1 # 即将开始的epoch 存储的时候是结束时候的epoch
         self.monitor_best = checkpoint['monitor_best']
 
         self.model.load_state_dict(checkpoint['state_dict'])

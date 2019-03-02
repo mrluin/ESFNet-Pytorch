@@ -23,7 +23,7 @@ class BaseTester(object):
                  test_data_loader,
                  begin_time,
                  loss_weight,
-                 do_predict):
+                 do_predict,):
 
         # for general
         self.config = config
@@ -31,6 +31,7 @@ class BaseTester(object):
         self.do_predict = do_predict
 
         # for train
+        #self.visdom = visdom
         self.model = model.to(self.device)
         self.loss_weight = loss_weight.to(self.device)
         self.loss = self._loss(loss_function= self.config.loss).to(self.device)
@@ -97,7 +98,6 @@ class BaseTester(object):
         return lr_scheduler
 
     def eval(self):
-
         self._resume_ckpt()
 
         self.model.eval()
