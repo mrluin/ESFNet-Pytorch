@@ -23,9 +23,10 @@ class BaseModel(nn.Module):
         :return: None
         """
         # 把可训练参数挑出来
-        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        #model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         # np.prod 用来计算所有元素的乘积 axis 内
-        params = sum([np.prod(p.size()) for p in model_parameters])
+        #params = sum([np.prod(p.size()) for p in model_parameters])
+        params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         print("Trainable parameters: {}".format(params))
 
     def __str__(self):
