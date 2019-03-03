@@ -75,7 +75,8 @@ class EDABlock(nn.Module):
 class EDANet(BaseModel):
     def __init__(self, config):
         super(EDANet, self).__init__()
-
+        
+        self.name='EDANet'
         self.nb_classes = config.nb_classes
 
         self.layers = nn.ModuleList()
