@@ -241,7 +241,7 @@ class BaseTrainer(object):
             # for loss
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch,torch.ones(1)*epoch),1),
-                Y = torch.stack((torch.tensor([train_log.loss]),torch.tensor([eval_log.val_Loss])),1),
+                Y = torch.stack((torch.tensor([train_log['loss']]),torch.tensor([eval_log['val_Loss']])),1),
                 win = loss_window,
                 update='append',
             )
@@ -255,14 +255,14 @@ class BaseTrainer(object):
             # for metrics_miou
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
-                Y = torch.stack((torch.tensor([train_log.miou]), torch.tensor([eval_log.val_MIoU])),1),
+                Y = torch.stack((torch.tensor([train_log['miou']]), torch.tensor([eval_log['val_MIoU']])),1),
                 win = miou_window,
                 update='append',
             )
             # for metrics_accuracy
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
-                Y = torch.stack((torch.tensor([train_log.acc]), torch.tensor([eval_log.val_Accuracy])),1),
+                Y = torch.stack((torch.tensor([train_log['acc']]), torch.tensor([eval_log['val_Accuracy']])),1),
                 win = acc_window,
                 update='append',
             )
