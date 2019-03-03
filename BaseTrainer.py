@@ -167,7 +167,7 @@ class BaseTrainer(object):
         # create panes for training phase for loss metrics learning_rate
         print("Visualization init ... ...")
         loss_window = self.visdom.line(
-            X = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            X = torch.stack((torch.ones(1),torch.ones(1)),1),
             Y = torch.stack((torch.zeros(1),torch.zeros(1)),1),
             opts= dict(title='train_val_loss',
                        # for different size panes, the result of download is the same!
@@ -183,7 +183,7 @@ class BaseTrainer(object):
                        )
         )
         lr_window = self.visdom.line(
-            X = torch.zeros(1),
+            X = torch.ones(1),
             Y = torch.tensor([self.current_lr]),
             opts = dict(title = 'learning_rate',
                         showlegend=True,
@@ -197,7 +197,7 @@ class BaseTrainer(object):
                         ytick=True)
         )
         miou_window = self.visdom.line(
-            X = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            X = torch.stack((torch.ones(1),torch.ones(1)),1),
             Y = torch.stack((torch.zeros(1),torch.zeros(1)),1),
             opts = dict(title='train_val_MIoU',
                         showlegend=True,
@@ -212,7 +212,7 @@ class BaseTrainer(object):
                         )
         )
         acc_window = self.visdom.line(
-            X = torch.stack((torch.zeros(1), torch.zeros(1)),1),
+            X = torch.stack((torch.ones(1), torch.ones(1)),1),
             Y = torch.stack((torch.zeros(1), torch.zeros(1)),1),
             opts = dict(title='train_val_Accuracy',
                         showlegend=True,
@@ -243,28 +243,28 @@ class BaseTrainer(object):
                 X = torch.stack((torch.ones(1)*epoch,torch.ones(1)*epoch),1),
                 Y = torch.stack((torch.tensor([train_log['loss']]),torch.tensor([eval_log['val_Loss']])),1),
                 win = loss_window,
-                update='append',
+                update='append' if epoch!=1 else 'insert',
             )
             # for learning_rate
             self.visdom.line(
                 X = torch.ones(1)*epoch,
                 Y = torch.tensor([self.current_lr]),
                 win = lr_window,
-                update='append',
+                update='append' if epoch!=1 else 'insert',
             )
             # for metrics_miou
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
                 Y = torch.stack((torch.tensor([train_log['miou']]), torch.tensor([eval_log['val_MIoU']])),1),
                 win = miou_window,
-                update='append',
+                update='append' if epoch!=1 else 'insert',
             )
             # for metrics_accuracy
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
                 Y = torch.stack((torch.tensor([train_log['acc']]), torch.tensor([eval_log['val_Accuracy']])),1),
                 win = acc_window,
-                update='append',
+                update='append' if epoch!=1 else 'insert',
             )
 
 
@@ -314,8 +314,8 @@ class BaseTrainer(object):
 
         for steps, (data, target) in enumerate(self.train_data_loader, start=1):
 
-            data = data.to(self.device)
-            target = target.to(self.device)
+            data = data.to(self.device, non_blocking=True)
+            target = target.to(self.device, non_blocking=True)
             # 加载数据所用的时间
             data_time.update(time.time() - tic)
 
@@ -375,8 +375,8 @@ class BaseTrainer(object):
             tic = time.time()
             for steps, (data, target) in enumerate(self.valid_data_loder, start=1):
 
-                data = data.to(self.device)
-                target = target.to(self.device)
+                data = data.to(self.device, non_blocking=True)
+                target = target.to(self.device, non_blocking=True)
                 data_time.update(time.time() - tic)
 
                 logits = self.model(data)
