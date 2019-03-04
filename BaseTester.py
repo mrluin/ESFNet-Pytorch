@@ -23,12 +23,13 @@ class BaseTester(object):
                  test_data_loader,
                  begin_time,
                  loss_weight,
-                 do_predict,):
+                 #do_predict,
+                ):
 
         # for general
         self.config = config
         self.device = torch.device('cuda:{}'.format(self.config.device_id)) if self.config.use_gpu else torch.device('cpu')
-        self.do_predict = do_predict
+        #self.do_predict = do_predict
 
         # for train
         #self.visdom = visdom
@@ -142,6 +143,7 @@ class BaseTester(object):
                   'MIoU: {:6.4f}, Accuracy: {:6.4f}, Loss: {:.6f}\n'
                   .format(batch_time.average(), data_time.average(),
                           ave_iou.average(), ave_acc.average(), ave_total_loss.average()))
+            self._save_pred(predictions, filenames)
             print('Prediction Phase !'
                   'Total time cost: {}s'
                   'Average time cost per batch: {}s'.format(predict_time._get_sum(), perdict_time.average())
