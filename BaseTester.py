@@ -135,8 +135,8 @@ class BaseTester(object):
                 ave_total_loss.update(loss.data.item())
                 ave_acc.update(acc)
                 ave_iou.update(miou)
-                predictions.append(logits)
-                filenames.append(filename)
+                predictions.extend(logits)
+                filenames.extend(filename)
             # display evaluation result at the end
             print('Evaluation phase !\n'
                   'Time: {:.2f},  Data: {:.2f},\n'
