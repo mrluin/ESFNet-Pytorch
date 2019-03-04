@@ -50,6 +50,7 @@ class BaseTester(object):
                 'loss': [],
                 'acc': [],
                 'miou': [],
+                'time': [],
             },
         }
         self.test_log_path = os.path.join(self.config.test_log_dir, model.name, self.begin_time)
@@ -101,7 +102,9 @@ class BaseTester(object):
         self._resume_ckpt()
 
         self.model.eval()
-
+        predictions = []
+        filenames = []
+        predict_time = AverageMeter()
         batch_time = AverageMeter()
         data_time = AverageMeter()
         ave_total_loss = AverageMeter()
@@ -110,7 +113,7 @@ class BaseTester(object):
 
         with torch.no_grad():
             tic = time.time()
-            for steps, (data, target, _) in enumerate(self.test_data_loader,start=1):
+            for steps, (data, target, filename) in enumerate(self.test_data_loader,start=1):
 
                 # data
                 data = data.to(self.device)
@@ -118,7 +121,9 @@ class BaseTester(object):
                 data_time.update(time.time()-tic)
 
                 # output, loss, and metrics
+                pred_tic = time.time()
                 logits = self.model(data)
+                predict_time.update(time.time()-pred_tic)
                 loss = self.loss(logits, target)
                 acc = Accuracy(logits, target)
                 miou = MIoU(logits, target, self.config.nb_classes)
@@ -129,18 +134,22 @@ class BaseTester(object):
                 ave_total_loss.update(loss.data.item())
                 ave_acc.update(acc)
                 ave_iou.update(miou)
-
+                predictions.append(logits)
+                filenames.append(filename)
             # display evaluation result at the end
-            print('Evaluation phase !'
-                  'Time: {:.2f},  Data: {:.2f},'
-                  'MIoU: {:6.4f}, Accuracy: {:6.4f}, Loss: {:.6f}'
+            print('Evaluation phase !\n'
+                  'Time: {:.2f},  Data: {:.2f},\n'
+                  'MIoU: {:6.4f}, Accuracy: {:6.4f}, Loss: {:.6f}\n'
                   .format(batch_time.average(), data_time.average(),
                           ave_iou.average(), ave_acc.average(), ave_total_loss.average()))
-
+            print('Prediction Phase !'
+                  'Total time cost: {}s'
+                  'Average time cost per batch: {}s'.format(predict_time._get_sum(), perdict_time.average())
+                  
         self.history['eval']['loss'].append(ave_total_loss.average())
         self.history['eval']['acc'].append(ave_acc.average())
         self.history['eval']['miou'].append(ave_iou.average())
-        #self.history['test']['time'].append(batch_time.average() - data_time.average())
+        self.history['eval']['time'].append(predict_time.average())
 
         #TODO
         print("Saved history of evaluation phase !")
