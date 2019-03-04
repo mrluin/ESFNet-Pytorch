@@ -39,7 +39,7 @@ def for_train(model,
     Trainer.train()
     print(" Training Done ! ")
 
-def for_test(model, config, test_data_loader, begin_time, loss_weight, do_predict,):
+def for_test(model, config, test_data_loader, begin_time, loss_weight,):# do_predict,):
     """
     :param model:
     :param config:
@@ -54,14 +54,15 @@ def for_test(model, config, test_data_loader, begin_time, loss_weight, do_predic
                         test_data_loader= test_data_loader,
                         begin_time= begin_time,
                         loss_weight= loss_weight,
-                        do_predict = do_predict,)
+                        #do_predict = do_predict
+                        ,)
     Tester.eval()
     print(" Evaluation Done ! ")
-    if do_predict == True :
-        Tester.predict()
-        print(" Make Predict Image Done ! ")
+    #if do_predict == True :
+    #    Tester.predict()
+    #    print(" Make Predict Image Done ! ")
 
-def main(config, visdom):
+def main(config):
 
     loss_weight = torch.ones(config.nb_classes)
     loss_weight[0] = 1.53297775619
@@ -69,7 +70,12 @@ def main(config, visdom):
 
     model = EDANet(config= config)
     print(model)
-
+    
+    # create visdom
+    viz = Visdom(server=args.server, port=args.port, env=model.name)
+    assert viz.check_connection(timeout_seconds=3), \
+        'No connection could be formed quickly'
+    
     train_dataset = MyDataset(config=config, subset='train')
     valid_dataset = MyDataset(config=config, subset='val')
     test_dataset = MyDataset(config=config, subset='test')
@@ -99,7 +105,7 @@ def main(config, visdom):
               begin_time= begin_time,
               resume_file= None,
               loss_weight= loss_weight,
-              visdom=visdom)
+              visdom=viz)
 
     """
     # testing phase does not need visdom, just one scalar for loss, miou and accuracy
@@ -122,11 +128,6 @@ if __name__ == '__main__':
     parser.add_argument('-server', metavar='server', type=str, default=DEFAULT_HOSTNAME,
                         help='Server address of the target to run the demo on.')
     args = parser.parse_args()
-
-    # create visdom
-    viz = Visdom(server=args.server, port=args.port)
-    assert viz.check_connection(timeout_seconds=3), \
-        'No connection could be formed quickly'
 
     # GPU setting init
     # keep prediction results the same when model runs each time
@@ -152,4 +153,4 @@ if __name__ == '__main__':
     random.seed(config.random_seed)
     np.random.seed(config.random_seed)
 
-    main(config= config, visdom=viz)
+    main(config= config)
