@@ -168,19 +168,22 @@ class BaseTrainer(object):
         print("Visualization init ... ...")
         loss_window = self.visdom.line(
             X = torch.stack((torch.ones(1),torch.ones(1)),1),
-            Y = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            Y = torch.stack((torch.ones(1),torch.ones(1)),1),
             opts= dict(title='train_val_loss',
                        # for different size panes, the result of download is the same!
                        showlegend=True,
                        legend=['training_loss', 'valid_loss'],
                        xtype='linear',
                        xlabel='epoch',
+                       xtickmin=0,
                        xtick=True,
                        xtickstep=10,
                        ytype='linear',
                        ylabel='loss',
-                       ytick=True,
-                       )
+                       ytickmin=0,
+                       #ytickmax=1,
+                       #ytickstep=0.1,
+                       ytick=True,)
         )
         lr_window = self.visdom.line(
             X = torch.ones(1),
@@ -190,39 +193,51 @@ class BaseTrainer(object):
                         legend=['learning_rate'],
                         xtype='linear',
                         xlabel='epoch',
+                        xtickmin=0,
                         xtick=True,
                         xtickstep=10,
                         ytype='linear',
+                        ytickmin=0,
+                        #ytickmax=1,
+                        #ytickstep=0.1,
                         ylabel='lr',
                         ytick=True)
         )
         miou_window = self.visdom.line(
             X = torch.stack((torch.ones(1),torch.ones(1)),1),
-            Y = torch.stack((torch.zeros(1),torch.zeros(1)),1),
+            Y = torch.stack((torch.ones(1),torch.ones(1)),1),
             opts = dict(title='train_val_MIoU',
                         showlegend=True,
                         legend=['Train_MIoU', 'Val_MIoU'],
                         xtype='linear',
                         xlabel='epoch',
+                        xtickmin=0,
                         xtick=True,
                         xtickstep=10,
                         ytype='linear',
                         ylabel='MIoU',
+                        ytickmin=0,
+                        #ytickmax=1,
+                        #ytickstep=0.1,
                         ytick=True
                         )
         )
         acc_window = self.visdom.line(
             X = torch.stack((torch.ones(1), torch.ones(1)),1),
-            Y = torch.stack((torch.zeros(1), torch.zeros(1)),1),
+            Y = torch.stack((torch.ones(1), torch.ones(1)),1),
             opts = dict(title='train_val_Accuracy',
                         showlegend=True,
                         legend=['Train_Acc', 'Val_Acc'],
                         xtype='linear',
                         xlabel='epoch',
+                        xtickmin=0,
                         xtick=True,
                         xtickstep=10,
                         ytype='linear',
                         ylabel='Accuracy',
+                        ytickmin=0,
+                        #ytickmax=1,
+                        #ytickstep=0.1,
                         ytick=True)
         )
 
