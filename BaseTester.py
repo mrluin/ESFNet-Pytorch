@@ -24,7 +24,7 @@ class BaseTester(object):
                  begin_time,
                  loss_weight,
                  #do_predict,
-                ):
+                 ):
 
         # for general
         self.config = config
@@ -99,10 +99,12 @@ class BaseTester(object):
         lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda1)
         return lr_scheduler
 
-    def eval(self):
+    def eval_and_predict(self):
+
         self._resume_ckpt()
 
         self.model.eval()
+
         predictions = []
         filenames = []
         predict_time = AverageMeter()
@@ -117,14 +119,15 @@ class BaseTester(object):
             for steps, (data, target, filename) in enumerate(self.test_data_loader,start=1):
 
                 # data
-                data = data.to(self.device)
-                target = target.to(self.device)
+                data = data.to(self.device, non_blocking=True)
+                target = target.to(self.device, non_blocking=True)
                 data_time.update(time.time()-tic)
 
                 # output, loss, and metrics
-                pred_tic = time.time()
+                pre_tic = time.time()
                 logits = self.model(data)
-                predict_time.update(time.time()-pred_tic)
+                predict_time.update(time.time()-pre_tic)
+
                 loss = self.loss(logits, target)
                 acc = Accuracy(logits, target)
                 miou = MIoU(logits, target, self.config.nb_classes)
@@ -132,22 +135,28 @@ class BaseTester(object):
                 # update ave loss and metrics
                 batch_time.update(time.time()-tic)
                 tic = time.time()
+
+                predictions.extend(logits)
+                filenames.extend(filename)
+
                 ave_total_loss.update(loss.data.item())
                 ave_acc.update(acc)
                 ave_iou.update(miou)
-                predictions.extend(logits)
-                filenames.extend(filename)
+
             # display evaluation result at the end
             print('Evaluation phase !\n'
                   'Time: {:.2f},  Data: {:.2f},\n'
-                  'MIoU: {:6.4f}, Accuracy: {:6.4f}, Loss: {:.6f}\n'
+                  'MIoU: {:6.4f}, Accuracy: {:6.4f}, Loss: {:.6f}'
                   .format(batch_time.average(), data_time.average(),
                           ave_iou.average(), ave_acc.average(), ave_total_loss.average()))
+            print('Saving Predict Map ... ...')
             self._save_pred(predictions, filenames)
-            print('Prediction Phase !'
-                  'Total time cost: {}s'
-                  'Average time cost per batch: {}s'.format(predict_time._get_sum(), perdict_time.average())
-                  
+            print('Prediction Phase !\n'
+                  'Total Time cost: {}s\n'
+                  'Average Time cost per batch: {}s!'
+                  .format(predict_time._get_sum(), predict_time.average()))
+
+
         self.history['eval']['loss'].append(ave_total_loss.average())
         self.history['eval']['acc'].append(ave_acc.average())
         self.history['eval']['miou'].append(ave_iou.average())
@@ -159,15 +168,13 @@ class BaseTester(object):
         with open(hist_path, 'w') as f:
             f.write(str(self.history))
 
-
+    '''
     def predict(self):
 
         self._resume_ckpt()
 
         self.model.eval()
 
-        predictions = []
-        filenames = []
 
         ave_total_time = AverageMeter()
         #test_paths = glob.glob(os.path.join(self.config.root_dir, 'test', self.config.data_folder_name, '*.tif'))
@@ -191,7 +198,8 @@ class BaseTester(object):
             print("Total time cost : {}s ,"
                   "Per image time cost : {}s"
                   .format(ave_total_time._get_sum(), ave_total_time.average()))
-            '''
+            # TODO Save predict time
+            
             for test_path in tqdm(test_paths):
                 data_index = test_path.split('/')[-1].split('.')[0]
                 save_path = os.path.join(self.predict_path, data_index+'.png')
@@ -208,7 +216,8 @@ class BaseTester(object):
             print("Total time cost : {}s , "
                   "Per image time cost : {}s"
                   .format(ave_total_time._get_sum(), ave_total_time.average()))
-            '''
+            
+    '''
     def _save_pred(self, predictions, filenames):
         """
         save predictions after evaluation phase
