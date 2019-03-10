@@ -147,13 +147,16 @@ class ShuffleUnit(nn.Module):
         return F.relu(out)
 
 class ShuffleSeg(nn.Module):
-    def __init__(self, config, groups=None):
+    def __init__(self, config, groups=None,
+                 down_factor=8, interpolate=True):
         super(ShuffleSeg, self).__init__()
 
-        self.name= 'shuffleSeg16x2x'
+        self.name= 'shuffleSeg_{}x_{}'.format(down_factor, 'cz' if interpolate else 't')
         self.config = config
         self.groups = groups
-
+        self.down_factor=down_factor
+        self.interpolate = interpolate
+        '''
         if self.groups == 1:
             self.stage_out_channels = [-1, 24, 144, 288, 576]
         elif self.groups == 2:
@@ -164,55 +167,87 @@ class ShuffleSeg(nn.Module):
             self.stage_out_channels = [-1, 24, 272, 544, 1088]
         elif self.groups == 8:
             self.stage_out_channels = [-1, 24, 384, 768, 1536]
+        '''
+        if down_factor == 8:
+            # encoder for 8x
+            self.encoder = nn.Sequential(
+                nn.Conv2d(3, 32, 3, stride=2, padding=1, bias=False),#
+                separable_conv2d(32, 64, stride=1),
+                ShuffleUnit(in_channels=64, out_channels=128, groups=8, stride=2),#
+                ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
+                ShuffleUnit(in_channels=128, out_channels=256, groups=8, stride=2),#
+                ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+                ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+                ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+                ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+                ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+            )
+            if interpolate == False:
+                # for 2x2x2x
+                self.decoder = nn.Sequential(
+                    nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1,
+                                       output_padding=1, bias=False),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
+                    ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
+                    nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1,
+                                       output_padding=1, bias=False),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    ShuffleUnit(in_channels=64, out_channels=64, groups=8, stride=1),
+                    ShuffleUnit(in_channels=64, out_channels=64, groups=8, stride=1),
+                    nn.ConvTranspose2d(64, self.config.nb_classes, 3, stride=2, padding=1,
+                                       output_padding=1, bias=False)
+                )
+            else:
+                self.project_layer = nn.Conv2d(256, self.config.nb_classes, 1, bias=False)
 
-        # encoder for 8x
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, 32, 3, stride=2, padding=1, bias=False),#
-            separable_conv2d(32, 64, stride=1),
-            ShuffleUnit(in_channels=64, out_channels=128, groups=8, stride=2),#
-            ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
-            ShuffleUnit(in_channels=128, out_channels=256, groups=8, stride=2),#
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-        )
+        elif down_factor == 16:
+            # encoder for 16x
+            self.encoder = nn.Sequential(
+                nn.Conv2d(3, 32, 3, stride=2, padding=1, bias=False),  #
+                separable_conv2d(32, 64, stride=1),
+                ShuffleUnit(in_channels=64, out_channels=128, groups=8, stride=2),#
+                ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
+                ShuffleUnit(in_channels=128, out_channels=256, groups=8, stride=2),#
+                ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+                ShuffleUnit(in_channels=256, out_channels=512, groups=8, stride=2),#
+                ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
+                ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
+                ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
+                ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
+                ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
+            )
+            if interpolate == False:
+                # for 2x2x2x2x
+                self.decoder = nn.Sequential(
+                    nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1,
+                                       output_padding=1, bias=False),
+                    nn.BatchNorm2d(256),
+                    nn.ReLU(inplace=True),
+                    ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+                    ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
+                    nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1,
+                                       output_padding=1, bias=False),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
+                    ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
+                    nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1,
+                                       output_padding=1, bias=False),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    ShuffleUnit(64, 64, groups=8, stride=1),
+                    ShuffleUnit(64, 64, groups=8, stride=1),
+                    nn.ConvTranspose2d(64, self.config.nb_classes, kernel_size=3, stride=2, padding=1,
+                                       output_padding=1, bias=False)
+                )
+            else:
+                self.project_layer = nn.Conv2d(512, self.config.nb_classes, 1, bias=False)
+
         '''
-        # encoder for 16x
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, 32, 3, stride=2, padding=1, bias=False),  #
-            separable_conv2d(32, 64, stride=1),
-            ShuffleUnit(in_channels=64, out_channels=128, groups=8, stride=2),#
-            ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
-            ShuffleUnit(in_channels=128, out_channels=256, groups=8, stride=2),#
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-            ShuffleUnit(in_channels=256, out_channels=512, groups=8, stride=2),#
-            ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
-            ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
-            ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
-            ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
-            ShuffleUnit(in_channels=512, out_channels=512, groups=8, stride=1),
-        )
-        '''
-        # for 2x2x2x
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1,
-                               output_padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
-            ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
-            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1,
-                               output_padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            ShuffleUnit(in_channels=64, out_channels=64, groups=8, stride=1),
-            ShuffleUnit(in_channels=64, out_channels=64, groups=8, stride=1),
-            nn.ConvTranspose2d(64, self.config.nb_classes, 3, stride=2, padding=1,
-                               output_padding=1, bias=False)
-        )
-        '''
+        # for testing bigger factor transpose_conv2d
         # for 2x4
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1,
@@ -230,31 +265,7 @@ class ShuffleSeg(nn.Module):
             nn.ConvTranspose2d(256, self.config.nb_classes, kernel_size=3, stride=8, padding=1,
                                output_padding=7, bias=False),
         )
-        '''
-        '''
-        # for 2x2x2x2x
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1,
-                               output_padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-            ShuffleUnit(in_channels=256, out_channels=256, groups=8, stride=1),
-            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1,
-                               output_padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
-            ShuffleUnit(in_channels=128, out_channels=128, groups=8, stride=1),
-            nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1,
-                               output_padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            ShuffleUnit(64, 64, groups=8, stride=1),
-            ShuffleUnit(64, 64, groups=8, stride=1),
-            nn.ConvTranspose2d(64, self.config.nb_classes, kernel_size=3, stride=2, padding=1,
-                            output_padding=1, bias=False)
-        )
+
         # for 2x2x4x
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1,
@@ -272,6 +283,7 @@ class ShuffleSeg(nn.Module):
             nn.ConvTranspose2d(128, self.config.nb_classes, 3, stride=4, padding=1,
                                output_padding=3, bias=False),
         )
+        
         # for 2x8x
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1,
@@ -283,8 +295,8 @@ class ShuffleSeg(nn.Module):
             nn.ConvTranspose2d(256, self.config.nb_classes, kernel_size=3, stride=8, padding=1,
                                output_padding=7, bias=False),
         )
-        '''
-        '''
+
+        # from shuffleSeg
         self.max_pooling = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.stage1 = nn.Sequential(
             ShuffleUnit(in_channels=self.stage_out_channels[1],
@@ -364,8 +376,11 @@ class ShuffleSeg(nn.Module):
     def forward(self, x):
 
         x = self.encoder(x)
-        x = self.decoder(x)
-
+        if self.interpolate == False:
+            x = self.decoder(x)
+        else:
+            x = self.project_layer(x)
+        x = F.interpolate(x, scale_factor=self.down_factor, mode='bilinear', align_corners=True)
         return x
 
 

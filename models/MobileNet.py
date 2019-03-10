@@ -73,62 +73,97 @@ class conv2d_bn_relu(nn.Module):
 
 
 class MobileNet(BaseModel):
-    def __init__(self, config):
+    def __init__(self, config, down_factor=8, interpolate=True):
         super(MobileNet, self).__init__()
         # for semantic segmentation
-        self.name = 'MobileNet8x'
+        self.name = 'MobileNet{}x_{}'.format(down_factor, 'cz' if interpolate else 't')
         self.nb_classes = config.nb_classes
+        self.down_factor = down_factor
+        self.interpolate = interpolate
 
-        # 8x down-sampling
-        self.encoder = nn.Sequential(
-            conv2d_bn_relu(3, 32, 3, stride=2),#
-            separable_conv2d(32, 64, 3, stride=1),
-            separable_conv2d(64, 128, 3, stride=2),#
-            separable_conv2d(128, 128, 3, stride=1),
-            separable_conv2d(128, 256, 3, stride=2),#
-            separable_conv2d(256, 256, 3, stride=1),
-            separable_conv2d(256, 256, 3, stride=1),
-            separable_conv2d(256, 256, 3, stride=1),
-            separable_conv2d(256, 256, 3, stride=1),
-            separable_conv2d(256, 256, 3, stride=1),
-        )
-        '''
-        # 16x down-sampling
-        self.encoder = nn.Sequential(
-            conv2d_bn_relu(3, 32, 3, stride=2),#
-            separable_conv2d(32, 64, 3, stride=1),
-            separable_conv2d(64, 128, 3, stride=2),#
-            separable_conv2d(128, 128, 3, stride=1),
-            separable_conv2d(128, 256, 3, stride=2),#
-            separable_conv2d(256, 256, 3, stride=1),
-            separable_conv2d(256, 512, 3, stride=2),#
-            separable_conv2d(512, 512, 3, stride=1),
-            separable_conv2d(512, 512, 3, stride=1),
-            separable_conv2d(512, 512, 3, stride=1),
-            separable_conv2d(512, 512, 3, stride=1),
-            separable_conv2d(512, 512, 3, stride=1),
-        )
-        '''
-        # use deconvolution to decode like using in ERFNet
-        # for 2x2x2x
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2,
-                               padding=1, output_padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            separable_conv2d(128, 128, 3, stride=1),
-            separable_conv2d(128, 128, 3, stride=1),
-            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2,
-                               padding=1, output_padding=1, bias=False),
+        if down_factor == 8:
+            # 8x down-sampling
+            self.encoder = nn.Sequential(
+                conv2d_bn_relu(3, 32, 3, stride=2),#
+                separable_conv2d(32, 64, 3, stride=1),
+                separable_conv2d(64, 128, 3, stride=2),#
+                separable_conv2d(128, 128, 3, stride=1),
+                separable_conv2d(128, 256, 3, stride=2),#
+                separable_conv2d(256, 256, 3, stride=1),
+                separable_conv2d(256, 256, 3, stride=1),
+                separable_conv2d(256, 256, 3, stride=1),
+                separable_conv2d(256, 256, 3, stride=1),
+                separable_conv2d(256, 256, 3, stride=1),
+            )
+            if interpolate == False:
+                # use deconvolution to decode like using in ERFNet
+                # for 2x2x2x
+                self.decoder = nn.Sequential(
+                    nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2,
+                                       padding=1, output_padding=1, bias=False),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    separable_conv2d(128, 128, 3, stride=1),
+                    separable_conv2d(128, 128, 3, stride=1),
+                    nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2,
+                                       padding=1, output_padding=1, bias=False),
 
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            separable_conv2d(64, 64, 3, stride=1),
-            separable_conv2d(64, 32, 3, stride=1),
-            nn.ConvTranspose2d(32, self.nb_classes, kernel_size=3, stride=2,
-                               padding=1, output_padding=1, bias=False)
-        )
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    separable_conv2d(64, 64, 3, stride=1),
+                    separable_conv2d(64, 32, 3, stride=1),
+                    nn.ConvTranspose2d(32, self.nb_classes, kernel_size=3, stride=2,
+                                       padding=1, output_padding=1, bias=False)
+                )
+            else:
+                self.project_layer = nn.Conv2d(256, self.nb_classes, 1, bias=False)
+
+        elif down_factor == 16:
+            # 16x down-sampling
+            self.encoder = nn.Sequential(
+                conv2d_bn_relu(3, 32, 3, stride=2),#
+                separable_conv2d(32, 64, 3, stride=1),
+                separable_conv2d(64, 128, 3, stride=2),#
+                separable_conv2d(128, 128, 3, stride=1),
+                separable_conv2d(128, 256, 3, stride=2),#
+                separable_conv2d(256, 256, 3, stride=1),
+                separable_conv2d(256, 512, 3, stride=2),#
+                separable_conv2d(512, 512, 3, stride=1),
+                separable_conv2d(512, 512, 3, stride=1),
+                separable_conv2d(512, 512, 3, stride=1),
+                separable_conv2d(512, 512, 3, stride=1),
+                separable_conv2d(512, 512, 3, stride=1),
+            )
+            if interpolate == False:
+                # for 2x2x2x2x
+                self.decoder = nn.Sequential(
+                    nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2,
+                                       padding=1, output_padding=1, bias=False),
+                    nn.BatchNorm2d(256),
+                    nn.ReLU(inplace=True),
+                    separable_conv2d(256, 256, 3, stride=1),
+                    separable_conv2d(256, 256, 3, stride=1),
+                    nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2,
+                                       padding=1, output_padding=1, bias=False),
+
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    separable_conv2d(128, 128, 3, stride=1),
+                    separable_conv2d(128, 128, 3, stride=1),
+                    nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2,
+                                       padding=1, output_padding=1, bias=False),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    separable_conv2d(64, 64, 3, stride=1),
+                    separable_conv2d(64, 32, 3, stride=1),
+                    nn.ConvTranspose2d(32, self.nb_classes, kernel_size=3, stride=2,
+                                       padding=1, output_padding=1, bias=False)
+                )
+            else:
+                self.project_layer = nn.Conv2d(512, self.nb_classes, 1, bias=False)
+
         '''
+        # for testing bigger upsample factor tranposed_conv2d
         # for 2x4x
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2,
@@ -140,34 +175,12 @@ class MobileNet(BaseModel):
             nn.ConvTranspose2d(128, self.nb_classes, kernel_size=3, stride=4,
                                padding=1, output_padding=3, bias=False),
         )
+        
         # for 8x
         self.decoder = nn.ConvTranspose2d(256, self.nb_classes, kernel_size=3,
                                           stride=8, padding=1, output_padding=7,bias=False)
         
-        # for 2x2x2x2x
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2,
-                               padding=1, output_padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            separable_conv2d(256, 256, 3, stride=1),
-            separable_conv2d(256, 256, 3, stride=1),
-            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2,
-                               padding=1, output_padding=1, bias=False),
-
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            separable_conv2d(128, 128, 3, stride=1),
-            separable_conv2d(128, 128, 3, stride=1),
-            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2,
-                               padding=1, output_padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            separable_conv2d(64, 64, 3, stride=1),
-            separable_conv2d(64, 32, 3, stride=1),
-            nn.ConvTranspose2d(32, self.nb_classes, kernel_size=3, stride=2,
-                           padding=1, output_padding=1, bias=False)
-        )
+        
         # for 2x2x4x
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2,
@@ -203,12 +216,22 @@ class MobileNet(BaseModel):
     def forward(self, input):
 
         encoder_out = self.encoder(input)
-        decoder_out = self.decoder(encoder_out)
+        if self.interpolate == False:
+            decoder_out = self.decoder(encoder_out)
+        else:
+            decoder_out = self.project_layer(encoder_out)
+        if self.down_factor == 8:
+            decoder_out = F.interpolate(decoder_out, scale_factor=8, mode='bilinear', align_corners=True)
+        elif self.down_factor == 16:
+            decoder_out = F.interpolate(decoder_out, scale_factor=16, mode='bilinear', align_corners=True)
 
         return decoder_out
 
 class MobileNet_test(nn.Module):
     def __init__(self, config):
+        """
+        # Note that MobileNet Vgg-like for testing flops function
+        """
         super(MobileNet_test, self).__init__()
         # for testing FLOPs calculation
         self.name = 'MobileNet'
