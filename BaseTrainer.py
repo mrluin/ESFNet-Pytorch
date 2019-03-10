@@ -23,7 +23,7 @@ class BaseTrainer(object):
                  resume_file=None,
                  loss_weight=None):
 
-        print("Training Start ... ...")
+        print("     + Training Start ... ...")
         # for general
         self.config = config
         self.device = (self._device(self.config.use_gpu, self.config.device_id))
@@ -70,7 +70,13 @@ class BaseTrainer(object):
                 'miou': [],
             }
         }
-
+        # for resume update curve
+        self.viz_winname = {
+            'miou': [],
+            'loss': [],
+            'acc': [],
+            'learning_rate': [],
+        }
         # for optimize
         self.loss_weight = loss_weight.to(self.device)
         self.loss = self._loss(loss_function=self.config.loss).to(self.device)
@@ -89,6 +95,7 @@ class BaseTrainer(object):
         self.monitor_metric = self.config.monitor.split('/')[1]
         self.monitor_best = 0
         self.best_epoch = -1
+        self.resume_ = True if resume_file else False
         # monitor init
         if self.monitor_mode != 'off':
             assert self.monitor_mode in ['min', 'max']
@@ -164,84 +171,92 @@ class BaseTrainer(object):
 
     def train(self):
 
-        # create panes for training phase for loss metrics learning_rate
-        print("Visualization init ... ...")
-        loss_window = self.visdom.line(
-            X = torch.stack((torch.ones(1),torch.ones(1)),1),
-            Y = torch.stack((torch.ones(1),torch.ones(1)),1),
-            opts= dict(title='train_val_loss',
-                       # for different size panes, the result of download is the same!
-                       showlegend=True,
-                       legend=['training_loss', 'valid_loss'],
-                       xtype='linear',
-                       xlabel='epoch',
-                       xtickmin=0,
-                       xtick=True,
-                       xtickstep=10,
-                       ytype='linear',
-                       ylabel='loss',
-                       ytickmin=0,
-                       #ytickmax=1,
-                       #ytickstep=0.1,
-                       ytick=True,)
-        )
-        lr_window = self.visdom.line(
-            X = torch.ones(1),
-            Y = torch.tensor([self.current_lr]),
-            opts = dict(title = 'learning_rate',
-                        showlegend=True,
-                        legend=['learning_rate'],
-                        xtype='linear',
-                        xlabel='epoch',
-                        xtickmin=0,
-                        xtick=True,
-                        xtickstep=10,
-                        ytype='linear',
-                        ytickmin=0,
-                        #ytickmax=1,
-                        #ytickstep=0.1,
-                        ylabel='lr',
-                        ytick=True)
-        )
-        miou_window = self.visdom.line(
-            X = torch.stack((torch.ones(1),torch.ones(1)),1),
-            Y = torch.stack((torch.ones(1),torch.ones(1)),1),
-            opts = dict(title='train_val_MIoU',
-                        showlegend=True,
-                        legend=['Train_MIoU', 'Val_MIoU'],
-                        xtype='linear',
-                        xlabel='epoch',
-                        xtickmin=0,
-                        xtick=True,
-                        xtickstep=10,
-                        ytype='linear',
-                        ylabel='MIoU',
-                        ytickmin=0,
-                        #ytickmax=1,
-                        #ytickstep=0.1,
-                        ytick=True
-                        )
-        )
-        acc_window = self.visdom.line(
-            X = torch.stack((torch.ones(1), torch.ones(1)),1),
-            Y = torch.stack((torch.ones(1), torch.ones(1)),1),
-            opts = dict(title='train_val_Accuracy',
-                        showlegend=True,
-                        legend=['Train_Acc', 'Val_Acc'],
-                        xtype='linear',
-                        xlabel='epoch',
-                        xtickmin=0,
-                        xtick=True,
-                        xtickstep=10,
-                        ytype='linear',
-                        ylabel='Accuracy',
-                        ytickmin=0,
-                        #ytickmax=1,
-                        #ytickstep=0.1,
-                        ytick=True)
-        )
+        if self.resume_ == False:
+            # create panes for training phase for loss metrics learning_rate
+            print("     + Visualization init ... ...")
+            loss_window = self.visdom.line(
+                X = torch.stack((torch.ones(1),torch.ones(1)),1),
+                Y = torch.stack((torch.ones(1),torch.ones(1)),1),
+                opts= dict(title='train_val_loss',
+                           # for different size panes, the result of download is the same!
+                           showlegend=True,
+                           legend=['training_loss', 'valid_loss'],
+                           xtype='linear',
+                           label='epoch',
+                           xtickmin=0,
+                           xtick=True,
+                           xtickstep=10,
+                           ytype='linear',
+                           ylabel='loss',
+                           ytickmin=0,
+                           #ytickmax=1,
+                           #ytickstep=0.1,
+                           ytick=True,
+                           )
+            )
+            lr_window = self.visdom.line(
+                X = torch.ones(1),
+                Y = torch.tensor([self.current_lr]),
+                opts = dict(title = 'learning_rate',
+                            showlegend=True,
+                            legend=['learning_rate'],
+                            xtype='linear',
+                            xlabel='epoch',
+                            xtickmin=0,
+                            xtick=True,
+                            xtickstep=10,
+                            ytype='linear',
+                            ytickmin=0,
+                            #ytickmax=1,
+                            #ytickstep=0.1,
+                            ylabel='lr',
+                            ytick=True)
+            )
+            miou_window = self.visdom.line(
+                X = torch.stack((torch.ones(1),torch.ones(1)),1),
+                Y = torch.stack((torch.ones(1),torch.ones(1)),1),
+                opts = dict(title='train_val_MIoU',
+                            showlegend=True,
+                            legend=['Train_MIoU', 'Val_MIoU'],
+                            xtype='linear',
+                            xlabel='epoch',
+                            xtickmin=0,
+                            xtick=True,
+                            xtickstep=10,
+                            ytype='linear',
+                            ylabel='MIoU',
+                            ytickmin=0,
+                            #ytickmax=1,
+                            #ytickstep=0.1,
+                            ytick=True
+                            )
+            )
+            acc_window = self.visdom.line(
+                X = torch.stack((torch.ones(1), torch.ones(1)),1),
+                Y = torch.stack((torch.ones(1), torch.ones(1)),1),
+                opts = dict(title='train_val_Accuracy',
+                            showlegend=True,
+                            legend=['Train_Acc', 'Val_Acc'],
+                            xtype='linear',
+                            xlabel='epoch',
+                            xtickmin=0,
+                            xtick=True,
+                            xtickstep=10,
+                            ytype='linear',
+                            ylabel='Accuracy',
+                            ytickmin=0,
+                            #ytickmax=1,
+                            #ytickstep=0.1,
+                            ytick=True)
+            )
+            self.viz_winname['miou'].append(str(miou_window))
+            self.viz_winname['loss'].append(str(loss_window))
+            self.viz_winname['learning_rate'].append(str(lr_window))
+            self.viz_winname['acc'].append(str(acc_window))
+        else:
+            print("     + Loading visdom file ... ... Done!")
 
-        print("Loaded, Training !")
+        print("     + Loaded, Training !")
 
         epochs = self.config.epochs
         # init weights at first
@@ -257,31 +272,30 @@ class BaseTrainer(object):
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch,torch.ones(1)*epoch),1),
                 Y = torch.stack((torch.tensor([train_log['loss']]),torch.tensor([eval_log['val_Loss']])),1),
-                win = loss_window,
-                update='append' if epoch!=1 else 'insert',
-            )
-            # for learning_rate
-            self.visdom.line(
-                X = torch.ones(1)*epoch,
-                Y = torch.tensor([self.current_lr]),
-                win = lr_window,
+                win = self.viz_winname['loss'][0],
                 update='append' if epoch!=1 else 'insert',
             )
             # for metrics_miou
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
                 Y = torch.stack((torch.tensor([train_log['miou']]), torch.tensor([eval_log['val_MIoU']])),1),
-                win = miou_window,
+                win = self.viz_winname['miou'][0],
                 update='append' if epoch!=1 else 'insert',
             )
             # for metrics_accuracy
             self.visdom.line(
                 X = torch.stack((torch.ones(1)*epoch, torch.ones(1)*epoch),1),
                 Y = torch.stack((torch.tensor([train_log['acc']]), torch.tensor([eval_log['val_Accuracy']])),1),
-                win = acc_window,
+                win = self.viz_winname['acc'][0],
                 update='append' if epoch!=1 else 'insert',
             )
-
+            # for learning_rate
+            self.visdom.line(
+                X=torch.ones(1) * epoch,
+                Y=torch.tensor([self.current_lr]),
+                win=self.viz_winname['learning_rate'][0],
+                update='append' if epoch != 1 else 'insert',
+            )
 
             # save best model and save ckpt
             best = False
@@ -297,14 +311,14 @@ class BaseTrainer(object):
                     not_improved_count += 1
 
                 if not_improved_count > self.early_stop:
-                    print("Validation Performance didn\'t improve for {} epochs."
-                          "Training stop :/"
+                    print("     + Validation Performance didn\'t improve for {} epochs."
+                          "     + Training stop :/"
                           .format(not_improved_count))
                     break
             if epoch % self.save_period == 0 or best == True:
                 self._save_ckpt(epoch, best=best)
         # save history file
-        print("Saving History ... ... ")
+        print("     + Saving History ... ... ")
         hist_path = os.path.join(self.log_dir, 'history.txt')
         with open(hist_path, 'w') as f:
             f.write(str(self.history))
@@ -390,6 +404,10 @@ class BaseTrainer(object):
             tic = time.time()
             for steps, (data, target) in enumerate(self.valid_data_loder, start=1):
 
+                # processing no blocking
+                # non_blocking tries to convert asynchronously with respect to the host if possible
+                # converting CPU tensor with pinned memory to CUDA tensor
+                # overlap transfer if pinned memory
                 data = data.to(self.device, non_blocking=True)
                 target = target.to(self.device, non_blocking=True)
                 data_time.update(time.time() - tic)
@@ -437,14 +455,15 @@ class BaseTrainer(object):
             'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'monitor_best': self.monitor_best,
+            'windows_name': self.viz_winname,
         }
         filename = os.path.join(self.checkpoint_dir, 'checkpoint-epoch{}.pth'.format(epoch))
         best_filename = os.path.join(self.checkpoint_dir, 'checkpoint-best.pth')
         if best:
-            print("Saving Best Checkpoint : Epoch {}  path: {} ...  ".format(epoch, best_filename))
+            print("     + Saving Best Checkpoint : Epoch {}  path: {} ...  ".format(epoch, best_filename))
             torch.save(state, best_filename)
         else:
-            print("Saving Checkpoint per {} epochs, path: {} ... ".format(self.save_period, filename))
+            print("     + Saving Checkpoint per {} epochs, path: {} ... ".format(self.save_period, filename))
             torch.save(state, filename)
 
     def _resume_ckpt(self, resume_file):
@@ -453,18 +472,19 @@ class BaseTrainer(object):
         :return:
         """
         resume_path = os.path.join(self.checkpoint_dir, resume_file)
-        print("Loading Checkpoint: {} ... ".format(resume_path))
+        print("     + Loading Checkpoint: {} ... ".format(resume_path))
         checkpoint = torch.load(resume_path)
         self.start_epoch = checkpoint['epoch'] + 1 # 即将开始的epoch 存储的时候是结束时候的epoch
         self.monitor_best = checkpoint['monitor_best']
 
         self.model.load_state_dict(checkpoint['state_dict'])
-        print("Model State Loaded ! :D ")
+        print("     + Model State Loaded ! :D ")
         self.optimizer.load_state_dict(checkpoint['optimizer'])
-        print("Optimizer State Loaded ! :D ")
+        print("     + Optimizer State Loaded ! :D ")
         self.history = checkpoint['history']
-        print("Checkpoint file: '{}' , Start epoch {} Loaded !"
-              "Prepare to run ! ! !"
+        self.viz_winname = checkpoint['windows_name']
+        print("     + Checkpoint file: '{}' , Start epoch {} Loaded !"
+              "     + Prepare to run ! ! !"
               .format(resume_path, self.start_epoch))
 
     def state_cuda(self, msg):
