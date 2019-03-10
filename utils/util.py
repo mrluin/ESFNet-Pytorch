@@ -153,7 +153,7 @@ class model_utils():
     display_weights = False
     display_nb_trainable = False
 
-    def __init__(self, model, config):
+    def __init__(self, model, config, index=None):
         # TODO include batch_size or not include batch_size
         """
         for hooks register
@@ -167,7 +167,11 @@ class model_utils():
         self.model = model
         self.config = config
         self.hooks = []
-
+        # for test downsampling flops and params
+        # input_size=256
+        self.channels_list = [3,   64,  128, 256, 512, 1024]
+        self.size_list =     [256, 128, 64 , 32,  16,  8]
+        self.index = index
     def model_params(self):
 
         trainable_params = sum([p.nelement() for p in filter(lambda p: p.requires_grad, self.model.parameters())])
@@ -204,6 +208,8 @@ class model_utils():
         self._register_hooks()
 
         input = torch.randn(size=(1, 3, self.config.input_size, self.config.input_size))
+        # for test module performance
+        #input = torch.randn(size=(1, self.channels_list[self.index], self.size_list[self.index], self.size_list[self.index]))
         if next(self.model.parameters()).is_cuda:
             input = input.cuda()
 
