@@ -45,7 +45,7 @@ class BaseTrainer(object):
                   | -- save | -- {model.name} | -- datetime | -- ckpt-epoch{}.pth.format(epoch)
                             |                               | -- best_model.pth
                             |
-                            | -- log | -- {model.name} | -- datetime | -- history.txt
+                            | -- log | -- {model.name} | -- datetime | -- history1.txt
                             | -- test| -- log
                                      | -- predict
         '''
@@ -134,6 +134,13 @@ class BaseTrainer(object):
                                   dampening=0,
                                   weight_decay=self.config.weight_decay,
                                   nesterov=True)
+            '''
+            optimizer = optim.RMSprop(self.model.parameters(),
+                                      lr = self.config.init_lr,
+                                      weight_decay=self.config.weight_decay,
+                                      momentum=self.config.momentum
+                                      )
+                                      '''
             return optimizer
 
     def _loss(self, loss_function):
@@ -319,7 +326,7 @@ class BaseTrainer(object):
                 self._save_ckpt(epoch, best=best)
         # save history file
         print("     + Saving History ... ... ")
-        hist_path = os.path.join(self.log_dir, 'history.txt')
+        hist_path = os.path.join(self.log_dir, 'history1.txt')
         with open(hist_path, 'w') as f:
             f.write(str(self.history))
 
@@ -483,7 +490,7 @@ class BaseTrainer(object):
         print("     + Optimizer State Loaded ! :D ")
         self.history = checkpoint['history']
         self.viz_winname = checkpoint['windows_name']
-        print("     + Checkpoint file: '{}' , Start epoch {} Loaded !"
+        print("     + Checkpoint file: '{}' , Start epoch {} Loaded !\n"
               "     + Prepare to run ! ! !"
               .format(resume_path, self.start_epoch))
 

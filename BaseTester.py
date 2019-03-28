@@ -105,8 +105,8 @@ class BaseTester(object):
 
         self.model.eval()
 
-        predictions = []
-        filenames = []
+        #predictions = []
+        #filenames = []
         predict_time = AverageMeter()
         batch_time = AverageMeter()
         data_time = AverageMeter()
@@ -126,6 +126,7 @@ class BaseTester(object):
                 # output, loss, and metrics
                 pre_tic = time.time()
                 logits = self.model(data)
+                self._save_pred(logits, filename)
                 predict_time.update(time.time()-pre_tic)
 
                 loss = self.loss(logits, target)
@@ -135,9 +136,6 @@ class BaseTester(object):
                 # update ave loss and metrics
                 batch_time.update(time.time()-tic)
                 tic = time.time()
-
-                predictions.extend(logits)
-                filenames.extend(filename)
 
                 ave_total_loss.update(loss.data.item())
                 ave_acc.update(acc)
@@ -149,8 +147,8 @@ class BaseTester(object):
                   'MIoU: {:6.4f}, Accuracy: {:6.4f}, Loss: {:.6f}'
                   .format(batch_time.average(), data_time.average(),
                           ave_iou.average(), ave_acc.average(), ave_total_loss.average()))
-            print('Saving Predict Map ... ...')
-            self._save_pred(predictions, filenames)
+            #print('Saving Predict Map ... ...')
+            #self._save_pred(predictions, filenames)
             print('Prediction Phase !\n'
                   'Total Time cost: {}s\n'
                   'Average Time cost per batch: {}s!'
@@ -163,61 +161,11 @@ class BaseTester(object):
         self.history['eval']['time'].append(predict_time.average())
 
         #TODO
-        print("Saved history of evaluation phase !")
-        hist_path = os.path.join(self.test_log_path, "history.txt")
+        print("     + Saved history of evaluation phase !")
+        hist_path = os.path.join(self.test_log_path, "history1.txt")
         with open(hist_path, 'w') as f:
             f.write(str(self.history))
 
-    '''
-    def predict(self):
-
-        self._resume_ckpt()
-
-        self.model.eval()
-
-
-        ave_total_time = AverageMeter()
-        #test_paths = glob.glob(os.path.join(self.config.root_dir, 'test', self.config.data_folder_name, '*.tif'))
-
-        # test_data_loader batch_size=1
-        with torch.no_grad():
-
-            for (data, _, filename) in tqdm(self.test_data_loader):
-                # only need data in predict phase
-                data = data.to(self.device)
-
-                tic = time.time()
-                pred_map = self.model(data)
-                ave_total_time.update(time.time()-tic)
-
-                predictions.extend(pred_map)
-                filenames.extend(filename)
-
-            print("Saveing ... ... ")
-            self._save_pred(predictions, filenames)
-            print("Total time cost : {}s ,"
-                  "Per image time cost : {}s"
-                  .format(ave_total_time._get_sum(), ave_total_time.average()))
-            # TODO Save predict time
-            
-            for test_path in tqdm(test_paths):
-                data_index = test_path.split('/')[-1].split('.')[0]
-                save_path = os.path.join(self.predict_path, data_index+'.png')
-                # in predict phase only use data
-                data = Image.open(test_path)
-                data = self._untrain_data_transform(data)
-                # here transform convert channel_last to channel_first
-                tic = time.time()
-                pred_map = self.model(data)
-                # output of model is logic need process
-                ave_total_time.update(time.time()- tic)
-                self._save_pred(pred_map, save_path)
-
-            print("Total time cost : {}s , "
-                  "Per image time cost : {}s"
-                  .format(ave_total_time._get_sum(), ave_total_time.average()))
-            
-    '''
     def _save_pred(self, predictions, filenames):
         """
         save predictions after evaluation phase
@@ -240,34 +188,21 @@ class BaseTester(object):
 
             map.save(save_path)
 
-
-
         # pred is tensor  --> numpy.ndarray save as single-channel --> save
         # get a mask 不用管channel的问题
-        '''
-        pred = torch.argmax(pred, dim=0)
-        mapping = {
-            0: 0,
-            1: 255,
-        }
-        for k in mapping:
-            pred[pred == k] = mapping[k]
-        pred = np.asarray(pred, dtype=np.uint8)
-        pred = Image.fromarray(pred)
-        pred.save(path)
-        '''
+
 
     def _resume_ckpt(self):
 
-        print("Loading ckpt path : {} ...".format(self.resume_ckpt_path))
+        print("     + Loading ckpt path : {} ...".format(self.resume_ckpt_path))
         checkpoint = torch.load(self.resume_ckpt_path)
 
         self.model.load_state_dict(checkpoint['state_dict'])
-        print("Model State Loaded ! :D ")
+        print("     + Model State Loaded ! :D ")
         self.optimizer.load_state_dict(checkpoint['optimizer'])
-        print("Optimizer State Loaded ! :D ")
-        print("Checkpoint file: '{}' , Loaded ! "
-              "Prepare to test ! ! !"
+        print("     + Optimizer State Loaded ! :D ")
+        print("     + Checkpoint file: '{}' , Loaded ! \n"
+              "     + Prepare to test ! ! !"
               .format(self.resume_ckpt_path))
 
 
