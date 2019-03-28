@@ -1,5 +1,6 @@
 import os
 import torch
+import time
 import sys
 from configs.config import MyConfiguration
 import torch.nn as nn
@@ -160,7 +161,6 @@ class model_utils():
         Generally, since majority of flops are in conv and linear, nflops ~= X might show that you are approximating it, and
         that is prob sufficient for almost all things.
 
-
         :param model:
         :param config: for simulating input_size, batch_size
         """
@@ -179,6 +179,38 @@ class model_utils():
 
         return trainable_params, total_params
 
+    def speed_testing(self):
+
+        # cuDnn configurations
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = False
+        # get average inference time for 200 iterations
+
+        name = self.model.name
+        print("     + {} Speed testing... ...".format(name))
+        model = self.model.to('cuda:{}'.format(self.config.device_id))
+        random_input = torch.randn(1,3,self.config.input_size, self.config.input_size).to('cuda:{}'.format(self.config.device_id))
+
+        model.eval()
+        print('     +warm up ... ...')
+        for i in range(500):
+            model(random_input)
+
+        time_list = []
+        for i in tqdm(range(10001)):
+            torch.cuda.synchronize()
+            tic = time.time()
+            model(random_input)
+            torch.cuda.synchronize()
+            # the first iteration time cost much higher, so exclude the first iteration
+            #print(time.time()-tic)
+            time_list.append(time.time()-tic)
+        time_list = time_list[1:]
+        print("     + Done 10000 iterations inference !")
+        print("     + Total time cost: {}s".format(sum(time_list)))
+        print("     + Average time cost: {}s".format(sum(time_list)/10000))
+        print("     + Frame Per Second: {:.2f}".format(1/(sum(time_list)/10000)))
+
 
     def _register_hooks(self):
 
@@ -191,15 +223,15 @@ class model_utils():
             elif isinstance(module, nn.Linear):
                 self.hooks.append(module.register_forward_hook(self.linear_hook))
                 self.hooks.append(module.register_forward_hook(self.hook))
-            elif isinstance(module, nn.BatchNorm2d):
-                self.hooks.append(module.register_forward_hook(self.bn_hook))
-                self.hooks.append(module.register_forward_hook(self.hook))
-            elif isinstance(module, nn.ReLU):
-                self.hooks.append(module.register_forward_hook(self.relu_hook))
-                self.hooks.append(module.register_forward_hook(self.hook))
-            elif isinstance(module, nn.MaxPool2d) or isinstance(module, nn.AvgPool2d):
-                self.hooks.append(module.register_forward_hook(self.pooling_hook))
-                self.hooks.append(module.register_forward_hook(self.hook))
+            #elif isinstance(module, nn.BatchNorm2d):
+            #    self.hooks.append(module.register_forward_hook(self.bn_hook))
+            #    self.hooks.append(module.register_forward_hook(self.hook))
+            #elif isinstance(module, nn.ReLU):
+            #    self.hooks.append(module.register_forward_hook(self.relu_hook))
+            #    self.hooks.append(module.register_forward_hook(self.hook))
+            #elif isinstance(module, nn.MaxPool2d) or isinstance(module, nn.AvgPool2d):
+            #    self.hooks.append(module.register_forward_hook(self.pooling_hook))
+            #    self.hooks.append(module.register_forward_hook(self.hook))
 
     def simulate_forward(self):
 
@@ -212,8 +244,10 @@ class model_utils():
         #input = torch.randn(size=(1, self.channels_list[self.index], self.size_list[self.index], self.size_list[self.index]))
         if next(self.model.parameters()).is_cuda:
             input = input.cuda()
-
+        self.model.eval()
+        #tic = time.time()
         self.model(input)
+        #duration = time.time()-tic
 
         total_mac = sum(self.mac_list_conv) + sum(self.mac_list_linear) + sum(self.mac_list_bn) + \
                     sum(self.mac_list_relu) + sum(self.mac_list_pooling)
@@ -225,7 +259,9 @@ class model_utils():
         print("     + Number MAC of Model: {:.2f}M ".format(float(total_mac) / 1e6))
         print("     + Number FLOPs of Model: {:.2f}M ".format(float(total_flops) / 1e6))
         print("     + Number Total Params of Model: {:.2f}M ".format(float(total_params) / 1e6))
-        print("     + Number Trainanble Params of Model: {:.2f}M ".format(float(trainable_params) / 1e6))
+        print("     + Number Trainanble Params of Model: {:.3f}K ".format(float(trainable_params) / 1e3))
+        #print("     + Duration per sample: {}s".format(duration))
+        #print("     + Frame Per Second: {}".format(int(1/duration)))
         for h in self.hooks:
             h.remove()
 
@@ -302,6 +338,7 @@ class model_utils():
     @staticmethod
     def pooling_hook(self, input, output):
         batch_size, in_channels, height, width = input[0].shape
+        #print(output)
         out_channels, out_height, out_width = output[0].shape
 
         # kernel_flops in each channels, doesn't share weight along all channels
