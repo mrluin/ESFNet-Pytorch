@@ -6,21 +6,6 @@ import numpy as np
     pred 's requires_grad = True
     .clone().cpu().numpy()
 '''
-def Accuracy1(pred, label):
-
-    pred = pred.detach().cpu().numpy()
-    pred = np.argmax(pred, axis=1)
-    label = label.cpu().numpy()
-    # ignore index 0 background return True False map
-    valid = (label > 0)
-    # valid and accuracy pixel.sum()
-    acc_sum = (valid * (pred == label)).sum()
-    # valid pixel sum
-    pixel_sum = valid.sum()
-    # epsilon
-    acc = acc_sum / (pixel_sum +1e-10)
-    return acc
-
 def Accuracy(pred, label):
 
     with torch.no_grad():
@@ -39,31 +24,6 @@ def Accuracy(pred, label):
         acc = acc_sum / (pixel_sum + 1e-10)
         return acc
 
-def MIoU1(pred, label, nb_classes):
-
-    pred = pred.detach().cpu().numpy()
-    pred = np.argmax(pred, axis=1)
-    label = label.cpu().numpy()
-    #pred = np.asarray(pred).copy()
-    #label = np.asarray(label).copy()
-    #label = label.clone()
-    pred += 1
-    label +=1
-
-    # ignore index 0 background    --> change to 1
-    pred = pred * (label > 0)
-    #print(pred)
-    intersection = pred * (pred == label)
-    #print(intersection)
-    (area_interection, _) = np.histogram(intersection, bins=nb_classes,
-                                         range=(1, nb_classes))
-    (area_pred, _) = np.histogram(pred, bins=nb_classes, range=(1, nb_classes))
-    (area_lab, _) = np.histogram(label, bins=nb_classes, range=(1, nb_classes))
-    area_union = area_pred + area_lab - area_interection
-
-    miou = area_interection/ area_union
-    mean_iou = miou[1:].sum() / (nb_classes-1)
-    return mean_iou
 
 def MIoU(pred, label, nb_classes):
 
