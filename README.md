@@ -26,7 +26,7 @@ Directory:
 3. set `epochs` to control the length of the training phase.
 4. setup the `train.py` script as follows:
 ```
-python -m visdom.server -env_path='./visdom_log' -port=8098 # start visdom server
+python -m visdom.server -env_path='./visdom_log/' -port=8097 # start visdom server
 python train.py
 ```
 `-env_path` is where the visdom logfile store in, and `-port` is the port for `visdom`. You could also change the `-port` in `train.py`.
