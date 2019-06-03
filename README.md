@@ -18,6 +18,11 @@ conda env create -f environment.yml
 conda activate esfnet
 ```
 
+### Sample Dataset
+For training, you can use as an example the [WHU Building Datase](study.rsgis.whu.edu.cn/pages/download/).
+
+You would need to download the cropped aerial images. `The 3rd option`
+
 ### Directory Structure
 ```
 Directory:
