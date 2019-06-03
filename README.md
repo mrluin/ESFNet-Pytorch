@@ -30,3 +30,7 @@ python -m visdom.server -env_path='./visdom_log' -port=8098 # start visdom serve
 python train.py
 ```
 `-env_path` is where the visdom logfile store in, and `-port` is the port for `visdom`. You could also change the `-port` in `train.py`.
+
+
+
+If my work give you some insights and hints, star me please! Thank you~
