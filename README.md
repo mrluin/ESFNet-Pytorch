@@ -33,4 +33,4 @@ python train.py
 
 
 
-If my work give you some insights and hints, star me please! Thank you~
+**If my work give you some insights and hints, star me please! Thank you~**
