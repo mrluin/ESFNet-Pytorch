@@ -2,13 +2,21 @@
 The implementation of novel efficient neural network ESFNet
 
 ### Clone the Repository
+```
 git clone https://github.com/mrluin/ESFNet-Pytorch.git
+```
+```
 cd ./ESFNet-Pytorch
+```
 
 
 ### Installation using Conda
+```
 conda env create -f environment.yml
+```
+```
 conda activate esfnet
+```
 
 ### Directory Structure
 ```
