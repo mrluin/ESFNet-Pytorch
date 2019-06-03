@@ -1,11 +1,14 @@
 # ESFNet: Efficient Networks for Building Extraction from High-Resolution Images
 The implementation of novel efficient neural network ESFNet
 
-### Prerequisites
-1. Pytorch 1.0.1
-2. visdom
-3. PIL
-4. tqdm
+### Clone the Repository
+git clone https://github.com/mrluin/ESFNet-Pytorch.git
+cd ./ESFNet-Pytorch
+
+
+### Installation using Conda
+conda env create -f environment.yml
+conda activate esfnet
 
 ### Directory Structure
 ```
