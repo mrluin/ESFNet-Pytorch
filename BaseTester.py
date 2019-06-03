@@ -98,7 +98,40 @@ class BaseTester(object):
         lambda1 = lambda epoch: pow((1-((epoch-1)/self.config.epochs)), 0.9)
         lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda1)
         return lr_scheduler
+    
+    
+    # Using for predicting only
+    def prediction(self, data_loader_for_predict):
 
+        self._resume_ckpt()
+        self.model.eval()
+
+        predict_time = AverageMeter()
+        batch_time = AverageMeter()
+        data_time = AverageMeter()
+
+        with torch.no_grad():
+            tic = time.time()
+            for steps, (data, target, filenames) in enumerate(data_loader_for_predict,start=1):
+
+                # data
+                data = data.to(self.device, non_blocking=True)
+                data_time.update(time.time() - tic)
+
+                pre_tic = time.time()
+                logits = self.model(data)
+                predict_time.update(time.time() - pre_tic)
+                self._save_pred(logits, filenames)
+
+                batch_time.update(time.time() - tic)
+                tic = time.time()
+
+            print("Predicting and Saving Done!\n"
+                  "Total Time: {:.2f}\n"
+                  "Data Time: {:.2f}\n"
+                  "Pre Time: {:.2f}"
+                  .format(batch_time._get_sum(), data_time._get_sum(), predict_time._get_sum()))
+            
     def eval_and_predict(self):
 
         self._resume_ckpt()
