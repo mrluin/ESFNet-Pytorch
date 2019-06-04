@@ -5,6 +5,7 @@ import argparse
 import time
 import numpy as np
 from PIL.Image import Image
+from PIL import Image
 import torch.utils.data as data
 from models.MyNetworks import ESFNet
 import torchvision.transforms as transforms
