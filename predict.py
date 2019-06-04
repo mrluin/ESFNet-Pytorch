@@ -77,7 +77,7 @@ class Predictor(object):
 
         with torch.no_grad():
             tic = time.time()
-            for steps, (data, target, filenames) in enumerate(self.dataloader_predict, start=1):
+            for steps, (data, filenames) in enumerate(self.dataloader_predict, start=1):
                 # data
                 data = data.to(self.device, non_blocking = True)
                 data_time.update(time.time() - tic)
