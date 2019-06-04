@@ -14,14 +14,17 @@ rgb_std = (0.2044, 0.1924, 0.2013)
 class MyDataset(Dataset):
     def __init__(self,
                  config,
+                 args,
                  subset):
         super(MyDataset, self).__init__()
         assert subset == 'train' or subset == 'val' or subset == 'test'
+
+        self.args = args
         self.config = config
-        self.root = self.config.root_dir
+        self.root = args.input
         self.subset = subset
-        self.data = self.config.data_folder_name
-        self.target = self.config.target_folder_name
+        self.data = self.config.data_folder_name # image
+        self.target = self.config.target_folder_name # label
 
         #self.data_transforms = data_transforms if data_transforms!=None else TF.to_tensor
         #self.target_transforms = target_transforms if target_transforms!= None else TF.to_tensor
@@ -34,13 +37,13 @@ class MyDataset(Dataset):
             self.root,
             subset,
             self.data,
-            '*.tif'
+            '*'
         ))
         self.target_list = glob.glob(os.path.join(
             self.root,
             subset,
             self.target,
-            '*.tif'
+            '*'
         ))
 
     def mask_to_class(self, mask):
