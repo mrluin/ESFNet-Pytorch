@@ -2,16 +2,16 @@ from configparser import ConfigParser
 import configparser
 
 """
-    # section 区分大小写 key and value 是不区分大小写的
-    配置文件中的信息总是以字符串的形式存储数据，读取的时候要进行转换
-    [DEFAULT] 中的值为所有section提供默认值，并且优先级最高
-    get方法 getboolean() getint() getfloat()
+    # section distinguish the upper and lower letters, but key and value do not.
+    The information in the configuration always store the data in string format, it will have translation when reading.
+    [DEFAULT]: the value in [DEFAULT] offer default_value to all sections, and it owns the highest priority. 
+    get: getboolean() getint() getfloat()
     get方法 提供一个更复杂的界面 保持向后兼容性 可以回退关键字仅提供回退值
     fallback 回退值
-    引用其他section中的值
-    插补值: configparser.BasicInterpolation()
-           configparser.ExtendedInterpolation() ${section:key}
-           
+    
+    refer values in other sections
+    interpolation method: configparser.BasicInterpolation()
+                          configparser.ExtendedInterpolation() ${section:key}
     config.set
     config.write
 """
@@ -19,12 +19,12 @@ class MyConfiguration():
     def __init__(self, config_file=None):
         super(MyConfiguration, self).__init__()
 
-        # ./ 当前目录
+        # ./ current directory
         if config_file is None:
             config_file = './configs/config.cfg'
 
         config = ConfigParser()
-        # 插补值方法
+        # interpolation method
         config._interpolation = configparser.ExtendedInterpolation()
         config.read(filenames= config_file)
 
@@ -45,7 +45,7 @@ class MyConfiguration():
         self.config.set(self.add_section, key, value)
         self.config.write(open(self.config_path, 'w'))
 
-    # 字符串 int float boolean
+    # string int float boolean
     @property
     def test_dir(self):
         return self.config.get("Directory", "test_dir")
