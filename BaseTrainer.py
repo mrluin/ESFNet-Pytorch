@@ -15,18 +15,21 @@ class BaseTrainer(object):
     def __init__(self,
                  model,
                  config,
+                 args,
                  train_data_loader,
                  valid_data_loader,
 
                  visdom,
                  begin_time,
+                 # TODO resume_file
                  resume_file=None,
                  loss_weight=None):
 
         print("     + Training Start ... ...")
         # for general
         self.config = config
-        self.device = (self._device(self.config.use_gpu, self.config.device_id))
+        self.args = args
+        self.device = (self._device(self.args.gpu))
         self.model = model.to(self.device)
         self.train_data_loader = train_data_loader
         self.valid_data_loder = valid_data_loader
@@ -49,13 +52,14 @@ class BaseTrainer(object):
                             | -- test| -- log
                                      | -- predict
         '''
-        # /home/jingweipeng/ljb/Building_Detecion/cropped_aerial_torch/save/model.name/time
+        # /home/UserGroup/UserName/Building_Detecion/cropped_aerial_torch/save/model.name/time
         # TODO model name setting
-        self.checkpoint_dir = os.path.join(self.config.save_dir, self.model.name, self.begin_time)
-        # /home/jingweipeng/ljb/Building_Detection/cropped_aerial_torch/save/log/model.name/time
-        self.log_dir = os.path.join(self.config.log_dir, self.model.name, self.begin_time)
+        self.checkpoint_dir = os.path.join(self.args.output, self.model.name, self.begin_time)
+        # /home/UserGroup/UserName/Building_Detection/cropped_aerial_torch/save/log/model.name/time
+        self.log_dir = os.path.join(self.args.output, 'log', self.model.name, self.begin_time)
         ensure_dir(self.checkpoint_dir)
         ensure_dir(self.log_dir)
+
         self.history = {
             'train': {
                 'epoch': [],
@@ -95,7 +99,12 @@ class BaseTrainer(object):
         self.monitor_metric = self.config.monitor.split('/')[1]
         self.monitor_best = 0
         self.best_epoch = -1
+
+        # resume file: the confirmed ckpt file.
+
+        self.resume_file = resume_file
         self.resume_ = True if resume_file else False
+
         # monitor init
         if self.monitor_mode != 'off':
             assert self.monitor_mode in ['min', 'max']
@@ -108,13 +117,13 @@ class BaseTrainer(object):
         # value needed to visualize: loss, metrics[acc, miou], learning_rate
         self.visdom = visdom
 
-    def _device(self, use_gpu, device_id):
+    def _device(self, gpu):
 
-        if use_gpu == False:
+        if gpu == -1:
             device = torch.device('cpu')
             return device
         else:
-            device = torch.device('cuda:{}'.format(device_id))
+            device = torch.device('cuda:{}'.format(gpu))
             return device
 
     def _optimizer(self, lr_algorithm):
@@ -261,6 +270,7 @@ class BaseTrainer(object):
             self.viz_winname['learning_rate'].append(str(lr_window))
             self.viz_winname['acc'].append(str(acc_window))
         else:
+            # here already loaded the checkpoint file: resume_file
             print("     + Loading visdom file ... ... Done!")
 
         print("     + Loaded, Training !")
@@ -478,10 +488,10 @@ class BaseTrainer(object):
         :param resume_file: checkpoint file name
         :return:
         """
-        resume_path = os.path.join(self.checkpoint_dir, resume_file)
+        resume_path = os.path.join(resume_file)
         print("     + Loading Checkpoint: {} ... ".format(resume_path))
         checkpoint = torch.load(resume_path)
-        self.start_epoch = checkpoint['epoch'] + 1 # 即将开始的epoch 存储的时候是结束时候的epoch
+        self.start_epoch = checkpoint['epoch'] + 1 # the next epoch, what saved in the ckeckpoint is the end-epoch
         self.monitor_best = checkpoint['monitor_best']
 
         self.model.load_state_dict(checkpoint['state_dict'])
