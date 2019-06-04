@@ -55,7 +55,7 @@ def for_test(model, config, test_data_loader, begin_time, loss_weight,):# do_pre
                         begin_time= begin_time,
                         loss_weight= loss_weight,
                         #do_predict = do_predict
-                        ,)
+                        )
     Tester.eval()
     print(" Evaluation Done ! ")
     #if do_predict == True :

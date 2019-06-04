@@ -1,0 +1,16 @@
+name: esfnet
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.6
+  - pytorch
+  - torchvision
+  - cudatoolkit
+  - cudnn
+  - visdom
+  - pillow
+  - tqdm
+  - opencv
+  - pandas
+
