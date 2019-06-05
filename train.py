@@ -86,16 +86,19 @@ def main(config, args):
     train_data_loader = DataLoader(dataset=train_dataset,
                                    batch_size=config.batch_size,
                                    shuffle=True,
+                                   pin_memory=True,
                                    num_workers=args.threads,
                                    drop_last=True)
     valid_data_loader = DataLoader(dataset=valid_dataset,
                                    batch_size=config.batch_size,
                                    shuffle=False,
+                                   pin_memory=True,
                                    num_workers=args.threads,
                                    drop_last=True)
     test_data_loader = DataLoader(dataset=test_dataset,
                                   batch_size=config.batch_size,
                                   shuffle=False,
+                                  pin_memory=True,
                                   num_workers=args.threads,
                                   drop_last=True)
 
@@ -141,7 +144,7 @@ if __name__ == '__main__':
                         help='root path to directory containing all the output, including predictions, logs and ckpt')
     parser.add_argument('-weight', metavar='weight', type=str, default=None,
                         help='path to ckpt which will be loaded')
-    parser.add_argument('-threads', metavar='threads', type=int, default=2,
+    parser.add_argument('-threads', metavar='threads', type=int, default=8,
                         help='number of thread used for DataLoader')
     parser.add_argument('-gpu', metavar='gpu', type=int, default=0,
                         help='gpu id to be used for prediction')
