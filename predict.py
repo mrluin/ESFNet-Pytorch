@@ -5,6 +5,7 @@ import argparse
 import time
 import numpy as np
 from PIL.Image import Image
+from PIL import Image
 import torch.utils.data as data
 from models.MyNetworks import ESFNet
 import torchvision.transforms as transforms
@@ -76,7 +77,7 @@ class Predictor(object):
 
         with torch.no_grad():
             tic = time.time()
-            for steps, (data, target, filenames) in enumerate(self.dataloader_predict, start=1):
+            for steps, (data, filenames) in enumerate(self.dataloader_predict, start=1):
                 # data
                 data = data.to(self.device, non_blocking = True)
                 data_time.update(time.time() - tic)
