@@ -61,7 +61,7 @@ class BaseTester(object):
         # here begin_time is the same with the time used in BaseTrainer.py
         # loading args.weight or the checkpoint-best.pth
         self.resume_ckpt_path = resume_file if resume_file is not None else \
-            os.path.join(self.config.output, self.model.name, self.begin_time, 'checkpoint-best.pth')
+            os.path.join(self.config.save_dir, self.model.name, self.begin_time, 'checkpoint-best.pth')
 
         ensure_dir(self.test_log_path)
         ensure_dir(self.predict_path)
