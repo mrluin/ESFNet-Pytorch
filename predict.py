@@ -1,4 +1,5 @@
 import torch
+import random
 import glob
 import os
 import argparse
@@ -67,8 +68,13 @@ class Predictor(object):
         self.device = torch.device('cpu') if self.args == -1 else torch.device('cuda:{}'.format(self.args.gpu))
         self.model = model.to(self.device)
         self.dataloader_predict = dataloader_predict
+        assert args.weight is not None, \
+            'The path of checkpoint-best.pth can not be None'
+        self.resume_ckpt_path = args.weight
 
     def predict(self):
+
+        self._resume_ckpt()
 
         self.model.eval()
         predict_time = AverageMeter()
@@ -95,6 +101,20 @@ class Predictor(object):
                   "Data Time: {:.2f}\n"
                   "Pre Time: {:.2f}"
                   .format(batch_time._get_sum(), data_time._get_sum(), predict_time._get_sum()))
+
+    def _resume_ckpt(self):
+
+        print("     + Loading ckpt path : {} ...".format(self.resume_ckpt_path))
+        checkpoint = torch.load(self.resume_ckpt_path)
+
+        self.model.load_state_dict(checkpoint['state_dict'])
+        print("     + Model State Loaded ! :D ")
+        #self.optimizer.load_state_dict(checkpoint['optimizer'])
+        #print("     + Optimizer State Loaded ! :D ")
+        print("     + Checkpoint file: '{}' , Loaded ! \n"
+              "     + Prepare to test ! ! !"
+              .format(self.resume_ckpt_path))
+
 
     def _save_pred(self, predictions, filenames):
         """
@@ -134,15 +154,25 @@ if __name__ == '__main__':
                         help='number of thread used for DataLoader')
     parser.add_argument('-gpu', metavar='gpu', type=int, default=0,
                         help='gpu id to be used for prediction')
+    parser.add_argument('-batch_size', metavar='batch_size', type=int, default=1,
+                        help='batch_size used in prediction')
     args = parser.parse_args()
+
+    # for duplicating
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
+    torch.manual_seed(config.random_seed)
+    random.seed(config.random_seed)
+    np.random.seed(config.random_seed)
 
     model = ESFNet.ESFNet(config = config)
 
     dataset_predict = dataset_predict(config = config, args= args)
 
     dataloader_predict = data.DataLoader(dataset=dataset_predict,
-                                         batch_size=config.batch_size,
+                                         batch_size=args.batch_size,
                                          shuffle=False,
+                                         pin_memory=True,
                                          num_workers=args.threads,
                                          drop_last=False)
 
