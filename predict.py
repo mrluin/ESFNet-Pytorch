@@ -65,7 +65,7 @@ class Predictor(object):
         super(Predictor, self).__init__()
 
         self.args = args
-        self.device = torch.device('cpu') if self.args == -1 else torch.device('cuda:{}'.format(self.args.gpu))
+        self.device = torch.device('cpu' if self.args.cpu else 'cuda')
         self.model = model.to(self.device)
         self.dataloader_predict = dataloader_predict
         assert args.weight is not None, \
@@ -152,6 +152,8 @@ if __name__ == '__main__':
                         help='path to ckpt which will be loaded')
     parser.add_argument('-threads', metavar='threads', type=int, default=2,
                         help='number of thread used for DataLoader')
+    parser.add_argument('-cpu', action='store_true',
+                        help='use cpu for prediction')
     parser.add_argument('-gpu', metavar='gpu', type=int, default=0,
                         help='gpu id to be used for prediction')
     parser.add_argument('-batch_size', metavar='batch_size', type=int, default=1,
