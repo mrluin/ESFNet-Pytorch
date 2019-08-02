@@ -2,72 +2,38 @@ import torch
 import argparse
 import os
 import glob
+import random
 
-import numpy as np
 import torchvision.transforms.functional as TF
-
+import numpy as np
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset
-from utils.dataset import image_cropper
-from predict import Predictor
-from data.dataset import MyDataset
+from tqdm import tqdm
+import torch.utils.data as data
+from utils.dataset import Cropper
+from predict import Predictor, dataset_predict
+from configs.config import Configurations
 from models.MyNetworks.ESFNet import ESFNet
-
+from utils.unpatchy import unpatchify
 '''
-    # instructions --input: path to high-resolution images used to predict
-    #                       the path to patches is set as '--input/patches/' by default
-    #              --output: path to output patches
-    #                        path to re-merged images is set as '--output/remerge/' by default
-    #              --ckpt_path: path to checkpoint file
-    #              overlap part is obtained by averaging
+    # instructions high-resolution images are saved in '--input'
+    #              then we use Cropper, get patches and saved in '--input/image_patches/'
+    #              use torch.utils.data.Dataset and torch.utils.data.DataLoader to load data
+    #              get predictions by the pre-trained model
+    #              save the output patches in '--output/patches'
+    #              re-merge the output patches into high-resolution images and save them in '--output/remerge'
 '''
-
-rgb_mean = (0.4353, 0.4452, 0.4131)
-rgb_std = (0.2044, 0.1924, 0.2013)
-
-class dataset_predict(Dataset):
-    def __init__(self, args):
-        super(dataset_predict, self).__init__()
-
-        self.images_path = os.path.join(args.input, 'patches')
-        self.images_list = glob.glob(os.path.join(self.images_path, '*'))
-
-    def transformations(self, images):
-
-        images = TF.to_tensor(images)
-        images = TF.normalize(images, mean=rgb_mean, std=rgb_std)
-
-        return images
-
-    def  __getitem__(self, index):
-
-        images = Image.open(self.images_list[index])
-        images = self.transformations(images)
-        return images
-
-    def __len__(self):
-
-        return len(self.images_list)
 
 def config_parser():
 
     parser = argparse.ArgumentParser(description='configurations')
+    parser.add_argument('--gpu', type=int, default=0,
+                        help='0 and 1 means gpu id, and -1 means cpu')
     parser.add_argument('-i', '--input', type=str, default=os.path.join('.', 'input'),
                         help='directory of input images, including images used to train and predict')
     parser.add_argument('-o', '--output', type=str, default=os.path.join('.', 'output'),
                         help='directory of output images, for predictions')
     parser.add_argument('--ckpt_path', type=str, default=os.path.join('.', 'checkpoint-best.pth'),
                         help='path to the checkpoint file, default name checkpoint-best.pth')
-
-
-    # whether shuffle or not is set in DataLoader
-    parser.add_argument('--size_x', type=int, default=224,
-                        help='the width of image patches')
-    parser.add_argument('--size_y', type=str, default=224,
-                        help='the height of image patches')
-    # step is set equal to patch size by default, that is the overlap is zero
-    # overlap = size - step
-
     # dataloader settings
     parser.add_argument('--batch_size', type=int, default=1,
                         help='batch_size')
@@ -76,11 +42,7 @@ def config_parser():
                              'will also allocate additional GPU-Memory')
     parser.add_argument('--nb_workers', type=int, default=1,
                         help='workers for DataLoader')
-    # patches settings
-    parser.add_argument('--step_x', type=int, default=224,
-                        help='the horizontal step of cropping images')
-    parser.add_argument('--step_y', type=int, default=224,
-                        help='the vertical step of cropping images')
+    # patches settings, some configs have already included in config.cfg
     parser.add_argument('--image_margin_color', type=list, default=[255, 255, 255],
                         help='the color of image margin color')
     parser.add_argument('--label_margin_color', type=list, default=[255, 255, 255],
@@ -90,18 +52,45 @@ def config_parser():
 
 def main():
 
-
     args = config_parser()
-    image_cropper(args)
-    my_dataset = dataset_predict(args=args)
-    my_dataloader = DataLoader(dataset=my_dataset, batch_size=args.batch_size, shuffle=False,
-                               pin_memory=args.pin_memory, drop_last=False, num_workers=args.nb_workers)
+    config = Configurations()
 
-    model = ESFNet(config=config)
+    # for duplicating
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
+    torch.manual_seed(config.random_seed)
+    random.seed(config.random_seed)
+    np.random.seed(config.random_seed)
 
-    Predictor(args=args, model=model, dataloader_predict=my_dataloader)
-    # when the predict phase is finish, get patches, then merge
+    # model load the pre-trained weight, load ckpt once out of predictor
+    model = ESFNet(config=config).to('cuda:{}'.format(args.gpu) if args.gpu >= 0 else 'cpu')
+    ckpt = torch.load(args.ckpt_path, map_location='cuda:{}'.format(args.gpu) if args.gpu >=0 else 'cpu')
+    model.load_state_dict(ckpt['state_dict'])
+
+    # path for each high-resolution images -> crop -> predict -> merge
+    source_image_pathes = glob.glob(os.path.join(args.input, '*.png'))
+    for source_image in tqdm(source_image_pathes):
+        # get high-resolution image name
+        filename = source_image.split('/')[-1].split('.')[0]
+        # cropper get patches and save to --input/patches
+        c = Cropper(args=args, configs=config, predict=True)
+        _, n_h, n_w = c.image_processor(image_path=source_image)
+        my_dataset = dataset_predict(args=args)
+        my_dataloader = data.DataLoader(my_dataset, batch_size=args.batch_size, shuffle=False,
+                                        pin_memory=args.pin_memory, drop_last=False, num_workers=args.nb_workers)
+
+        # predict using pre-trained network
+        p = Predictor(args=args, model=model, dataloader_predict=my_dataloader)
+        p.predict()
+        # patches [total_size, C, H, W] p.patches tensor -> reshape -> [total_size, H, W, C]
+        patches_tensor = torch.transpose(p.patches, 1, 3)
+        patches_tensor = patches_tensor.view(n_h, n_w, -1)
+        # merge and save the output image
+        patches = patches_tensor.cpu().numpy()
+        img = unpatchify(patches, n_h, n_w)
+        img = Image.fromarray(img)
+        save_path = os.path.join(args.output, 'remerge', filename+'.png')
+        img.save(save_path)
 
 if __name__ == '__main__':
-
     main()
