@@ -2,74 +2,9 @@ import argparse
 import os
 import glob
 import cv2
+import numpy as np
 from functools import partial
 from tqdm import tqdm
-
-
-
-def pad_and_crop_images(image, size_x, size_y, step_x, step_y, margin_color):
-
-    # should the value of border be equal to background ?
-    # padding
-    image_y, image_x = image.shape[:2]
-    border_y = 0
-    if image_y % size_y != 0:
-        border_y = (size_y - (image_y % size_y) + 1) // 2
-        image = cv2.copyMakeBorder(image, border_y, border_y, 0, 0, cv2.BORDER_CONSTANT, value=margin_color)
-        image_y = image.shape[0]
-    border_x = 0
-    if image_x % size_x != 0:
-        border_x = (size_x - (image_x % size_x) + 1) // 2
-        image = cv2.copyMakeBorder(image, 0, 0, border_x, border_x, cv2.BORDER_CONSTANT, value=margin_color)
-        image_x = image.shape[1]
-
-    # cropping
-    # cannot adopt for loop, otherwise the cropped images will include very little margin
-    patches = []
-    start_y = 0
-    while (start_y + size_y) <= image_y:
-        start_x = 0
-        while(start_x + size_x) <= image_x:
-            patches.append(image[start_y:start_y + size_y, start_x:start_x + size_x])
-            start_x += step_x
-        start_y += step_y
-    return patches, border_y, border_x
-
-def save_images(image_patch_list, gt_patch_list, output_path):
-
-    # save_path -> image_save_path os.path.join(args.output, 'image')
-    #           -> gt_save_path    os.path.join(args.output, 'gt')
-    # filename format: 'train' + '_id' + '.png'
-    #                  'gt' + '_id' + '.png'
-
-    image_patchpath = os.path.join(output_path, 'images')
-    gt_patchpath = os.path.join(output_path, 'gt')
-
-    for i, image in enumerate(image_patch_list):
-        cv2.imwrite(os.path.join(image_patchpath, 'train' + str(i) + '.png'), image)
-    for i, gt in enumerate(gt_patch_list):
-        cv2.imwrite(os.path.join(gt_patchpath, 'gt' + str(i) + '.png'), gt)
-
-def process_image(image_path, gt_path, size_x, size_y, step_x, step_y, image_margin_color, label_margin_color, output_path):
-
-    # Read train and ground_truth images, cropping them and save
-
-    #image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2GRAY)
-    image = cv2.imread(image_path)
-    img_patches_list, _, _ = pad_and_crop_images(image, size_x, size_y, step_x, step_y, image_margin_color)
-    #gt = cv2.cvtColor(cv2.imread(gt_path), cv2.COLOR_BGR2GRAY)
-    gt = cv2.imread(gt_path)
-    gt_patches_list, _, _ = pad_and_crop_images(gt, size_x, size_y, step_x, step_y, label_margin_color)
-
-    assert len(img_patches_list) == len(gt_patches_list), \
-        'MISMATCH ERROR, image and ground truth'
-
-    save_images(img_patches_list, gt_patches_list, output_path)
-
-def ensure_and_mkdir(path):
-
-    if not os.path.exists(path):
-        os.makedirs(path)
 
 def parse_args():
 
@@ -97,26 +32,99 @@ def parse_args():
 
     return parser.parse_args()
 
-if __name__ == '__main__':
 
-    args = parse_args()
+class Cropper(object):
+    def __init__(self, args, configs, predict=True):
+        super(Cropper, self).__init__()
 
-    # confirm the directory of output images and gt
-    ensure_and_mkdir(os.path.join(args.output))
-    ensure_and_mkdir(os.path.join(args.output, 'images'))
-    ensure_and_mkdir(os.path.join(args.output, 'gt'))
+        self.args = args
+        self.configs = configs
+        self.predict = predict
 
-    # input images and ground truth
-    # input image path: args.input/images
-    # input gt path: args.input/gt
+        self.input_path = self.args.input
+        self.input_patches_path = os.path.join(self.input_path, 'image_patches')
+        self.input_label_path = os.path.join(self.input_path, 'label_patches')
 
-    image_pathes = glob.glob(os.path.join(args.input, 'images', '*'))
-    gt_pathes = glob.glob(os.path.join(args.input, 'gt', '*'))
+        self.output_path = self.args.output
 
-    f = partial(process_image, size_x=args.size_x, size_y=args.size_y, step_x=args.step_x, step_y=args.step_y,
-                image_margin_color=args.image_margin_color, label_margin_color=args.label_margin_color, output_path=args.output)
-    for index, (image_path, gt_path) in tqdm(enumerate(zip(image_pathes, gt_pathes))):
-        f(image_path, gt_path)
+        if predict:
+            self.ensure_and_mkdir(self.input_path)
+            self.ensure_and_mkdir(self.input_patches_path)
+        else:
+            self.ensure_and_mkdir(self.input_path)
+            self.ensure_and_mkdir(self.input_patches_path)
+            self.ensure_and_mkdir(self.input_label_path)
+        # by default
+        self.size_x = self.configs.cropped_size
+        self.size_y = self.configs.cropped_size
+        self.step_x = self.configs.step_x
+        self.step_y = self.configs.step_y
 
+        self.image_margin_color = args.image_margin_color
+        self.label_margin_color = args.label_margin_color
 
+    def get_filename(self, path):
+        return path.split('/')[-1].split('.')[0]
+
+    def ensure_and_mkdir(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+    def pad_and_crop_images(self ,image, margin_color):
+
+        # should the value of border be equal to background ?
+        # padding
+        image_y, image_x = image.shape[:2]
+        border_y = 0
+        if image_y % self.size_y != 0:
+            border_y = (self.size_y - (image_y % self.size_y) + 1) // 2
+            image = cv2.copyMakeBorder(image, border_y, border_y, 0, 0, cv2.BORDER_CONSTANT, value=margin_color)
+            image_y = image.shape[0]
+        border_x = 0
+        if image_x % self.size_x != 0:
+            border_x = (self.size_x - (image_x % self.size_x) + 1) // 2
+            image = cv2.copyMakeBorder(image, 0, 0, border_x, border_x, cv2.BORDER_CONSTANT, value=margin_color)
+            image_x = image.shape[1]
+
+        # calculate n_w and n_h
+        n_w = int(image_x / self.size_x)
+        n_h = int(image_y / self.size_y)
+
+        # cropping
+        # cannot adopt for loop, otherwise the cropped images will include very little margin
+        patches = []
+        start_y = 0
+        while (start_y + self.size_y) <= image_y:
+            start_x = 0
+            while (start_x + self.size_x) <= image_x:
+                patches.append(image[start_y:start_y + self.size_y, start_x:start_x + self.size_x])
+                start_x += self.step_x
+            start_y += self.step_y
+        return patches, n_w, n_h
+
+    def save_images(self, patches, save_path, father_name):
+
+        for i, patch in enumerate(patches):
+            cv2.imwrite(os.path.join(save_path, father_name + str(i) + '.png'), patch)
+
+    def image_processor(self, image_path, label_path=None):
+
+        image = cv2.imread(image_path)
+        filename = self.get_filename(image_path)
+        patches, n_w, n_h = self.pad_and_crop_images(image=image, margin_color=self.image_margin_color)
+        # patches is saved in input_path/image_patches
+        input_path = os.path.join(self.input_path, 'image_patches')
+        self.save_images(patches, input_path, filename)
+
+        if self.predict is False:
+            assert label_path is not None, \
+                'label_path is None'
+            label = cv2.imread(label_path)
+            label_filename = self.get_filename(label_path)
+            label_patches, _, _ = self.pad_and_crop_images(image=label, margin_color=self.label_margin_color)
+            # label_patches is saved in input_path/gt_patches
+            input_path = os.path.join(self.input_path, 'gt_patches')
+            self.save_images(label_patches, input_path, label_filename)
+
+        return patches, n_w, n_h
 
