@@ -11,7 +11,6 @@ import torch.utils.data as data
 from models.MyNetworks import ESFNet
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-from configs.config import MyConfiguration
 from utils.util import AverageMeter
 from data.dataset import MyDataset
 
@@ -23,20 +22,14 @@ rgb_std = (0.2044, 0.1924, 0.2013)
 
 class dataset_predict(data.Dataset):
     def __init__(self,
-                 config,
                  args):
         super(dataset_predict, self).__init__()
-        self.config = config
+
         self.args = args
-        self.root = self.args.input
+        self.input_path = os.path.join(self.args.input, 'image_patches')
+        self.data_list = glob.glob(os.path.join(self.input_path, '*'))
 
-        # self.args.input
-        self.data_list = glob.glob(os.path.join(self.root, '*'))
-
-    def untrain_transforms(self, image):
-
-        resize = transforms.Resize(size=(self.config.input_size, self.config.input_size))
-        image = resize(image)
+    def transform(self, image):
 
         image = TF.to_tensor(image)
         image = TF.normalize(image, mean=rgb_mean, std=rgb_std)
@@ -46,10 +39,8 @@ class dataset_predict(data.Dataset):
     def __getitem__(self, index):
 
         datas = Image.open(self.data_list[index])
-
-        t_datas = self.untrain_transforms(datas)
-
-        # return data and its filename
+        t_datas = self.transform(datas)
+        # return filename for saving patch predictions.
         return t_datas, self.data_list[index]
 
     def __len__(self):
@@ -59,70 +50,45 @@ class dataset_predict(data.Dataset):
 
 class Predictor(object):
     def __init__(self,
-                 args,
-                 model,
-                 dataloader_predict):
+                 args, model, dataloader_predict):
         super(Predictor, self).__init__()
 
         self.args = args
-        self.device = torch.device('cpu' if self.args.cpu else 'cuda')
-        self.model = model.to(self.device)
+        self.model = model
         self.dataloader_predict = dataloader_predict
-        assert args.weight is not None, \
-            'The path of checkpoint-best.pth can not be None'
-        self.resume_ckpt_path = args.weight
+        self.patches = None
 
     def predict(self):
 
-        self._resume_ckpt()
-
         self.model.eval()
-        predict_time = AverageMeter()
-        batch_time = AverageMeter()
-        data_time = AverageMeter()
+        #predict_time = AverageMeter()
+        #batch_time = AverageMeter()
+        #data_time = AverageMeter()
 
         with torch.no_grad():
             tic = time.time()
             for steps, (data, filenames) in enumerate(self.dataloader_predict, start=1):
-                # data
-                data = data.to(self.device, non_blocking = True)
-                data_time.update(time.time() - tic)
-
+                data = data.to(self.model.device, non_blocking = True)
+                #data_time.update(time.time() - tic)
                 pre_tic = time.time()
                 logits = self.model(data)
-                predict_time.update(time.time() - pre_tic)
                 self._save_pred(logits, filenames)
-
-                batch_time.update(time.time() - tic)
+                # here depends on the use case, logits -> mask
+                if self.patches is None:
+                    self.patches = torch.argmax(logits) * 255.
+                else:
+                    self.patches = torch.cat([self.patches, torch.argmax(logits)*255.], 0)
+                #predict_time.update(time.time() - pre_tic)
+                #batch_time.update(time.time() - tic)
                 tic = time.time()
 
-            print("Predicting and Saving Done!\n"
-                  "Total Time: {:.2f}\n"
-                  "Data Time: {:.2f}\n"
-                  "Pre Time: {:.2f}"
-                  .format(batch_time._get_sum(), data_time._get_sum(), predict_time._get_sum()))
-
-    def _resume_ckpt(self):
-
-        print("     + Loading ckpt path : {} ...".format(self.resume_ckpt_path))
-        checkpoint = torch.load(self.resume_ckpt_path)
-
-        self.model.load_state_dict(checkpoint['state_dict'])
-        print("     + Model State Loaded ! :D ")
-        #self.optimizer.load_state_dict(checkpoint['optimizer'])
-        #print("     + Optimizer State Loaded ! :D ")
-        print("     + Checkpoint file: '{}' , Loaded ! \n"
-              "     + Prepare to test ! ! !"
-              .format(self.resume_ckpt_path))
-
-
+            #print("Predicting and Saving Done!\n"
+            #      "Total Time: {:.2f}\n"
+            #      "Data Time: {:.2f}\n"
+            #      "Pre Time: {:.2f}"
+            #      .format(batch_time._get_sum(), data_time._get_sum(), predict_time._get_sum()))
     def _save_pred(self, predictions, filenames):
-        """
-        save predictions after evaluation phase
-        :param predictions: predictions (output of model logits(after softmax))
-        :param filenames: filenames list correspond to predictions
-        :return: None
-        """
+
         for index, map in enumerate(predictions):
 
             map = torch.argmax(map, dim=0)
@@ -132,51 +98,6 @@ class Predictor(object):
             # filename /0.1.png [0] 0 [1] 1
             filename = filenames[index].split('/')[-1].split('.')
             save_filename = filename[0]+'.'+filename[1]
-            save_path = os.path.join(self.args.output, save_filename+'.png')
+            save_path = os.path.join(self.args.output, 'patches', save_filename+'.png')
 
             map.save(save_path)
-
-        # pred is tensor  --> numpy.ndarray save as single-channel --> save
-        # get a mask 不用管channel的问题
-
-if __name__ == '__main__':
-
-    config = MyConfiguration()
-
-    parser = argparse.ArgumentParser("configurations for prediction")
-    parser.add_argument('-input', metavar='input', type=str, default=None,
-                        help='root path to directory containing images used for predicting')
-    parser.add_argument('-output', metavar='output', type=str, default=None,
-                        help='root path to directory output predicted images')
-    parser.add_argument('-weight', metavar='weight', type=str, default=None,
-                        help='path to ckpt which will be loaded')
-    parser.add_argument('-threads', metavar='threads', type=int, default=2,
-                        help='number of thread used for DataLoader')
-    parser.add_argument('-cpu', action='store_true',
-                        help='use cpu for prediction')
-    parser.add_argument('-gpu', metavar='gpu', type=int, default=0,
-                        help='gpu id to be used for prediction')
-    parser.add_argument('-batch_size', metavar='batch_size', type=int, default=1,
-                        help='batch_size used in prediction')
-    args = parser.parse_args()
-
-    # for duplicating
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = True
-    torch.manual_seed(config.random_seed)
-    random.seed(config.random_seed)
-    np.random.seed(config.random_seed)
-
-    model = ESFNet.ESFNet(config = config)
-
-    dataset_predict = dataset_predict(config = config, args= args)
-
-    dataloader_predict = data.DataLoader(dataset=dataset_predict,
-                                         batch_size=args.batch_size,
-                                         shuffle=False,
-                                         pin_memory=True,
-                                         num_workers=args.threads,
-                                         drop_last=False)
-
-    predictor = Predictor(args = args, model = model, dataloader_predict=dataloader_predict)
-    predictor.predict()
