@@ -3,7 +3,7 @@ import argparse
 import os
 import glob
 import random
-
+import cv2
 import torchvision.transforms.functional as TF
 import numpy as np
 from PIL import Image
@@ -11,7 +11,7 @@ from tqdm import tqdm
 import torch.utils.data as data
 from utils.dataset import Cropper
 from predict import Predictor, dataset_predict
-from configs.config import Configurations
+from configs.config import MyConfiguration
 from models.MyNetworks.ESFNet import ESFNet
 from utils.unpatchy import unpatchify
 '''
@@ -53,7 +53,7 @@ def config_parser():
 def main():
 
     args = config_parser()
-    config = Configurations()
+    config = MyConfiguration()
 
     # for duplicating
     torch.backends.cudnn.benchmark = True
@@ -74,7 +74,7 @@ def main():
         filename = source_image.split('/')[-1].split('.')[0]
         # cropper get patches and save to --input/patches
         c = Cropper(args=args, configs=config, predict=True)
-        _, n_h, n_w = c.image_processor(image_path=source_image)
+        _, n_w, n_h, image_h, image_w = c.image_processor(image_path=source_image)
         my_dataset = dataset_predict(args=args)
         my_dataloader = data.DataLoader(my_dataset, batch_size=args.batch_size, shuffle=False,
                                         pin_memory=args.pin_memory, drop_last=False, num_workers=args.nb_workers)
@@ -84,13 +84,32 @@ def main():
         p.predict()
         # patches [total_size, C, H, W] p.patches tensor -> reshape -> [total_size, H, W, C]
         patches_tensor = torch.transpose(p.patches, 1, 3)
-        patches_tensor = patches_tensor.view(n_h, n_w, -1)
+        patches_tensor = patches_tensor.view(n_h, n_w, config.cropped_size, config.cropped_size, 3)
         # merge and save the output image
         patches = patches_tensor.cpu().numpy()
-        img = unpatchify(patches, n_h, n_w)
-        img = Image.fromarray(img)
+        img = unpatchify(patches, image_h, image_w)
+        #img = Image.fromarray(img)
         save_path = os.path.join(args.output, 'remerge', filename+'.png')
-        img.save(save_path)
+        cv2.imwrite(save_path, img)
+        #img.save(save_path)
+
+def patchify_and_unpatchify_test():
+
+    args = config_parser()
+    config = MyConfiguration()
+
+    source_image_path = os.path.join(args.input, 'top_mosaic_09cm_area17.tif')
+    filename = source_image_path.split('/')[-1].split('.')[0]
+    c = Cropper(args=args, configs=config, predict=True)
+    patches, n_w, n_h, image_h, image_w = c.image_processor(image_path=source_image_path)
+    # patch list -> np.array [total_size, H, W, C]
+    np_patches = np.asarray(patches)
+    np_patches = np_patches.reshape(n_h, n_w, config.cropped_size, config.cropped_size, 3)
+    img = unpatchify(np_patches, image_h, image_w)
+    save_path = os.path.join(args.output, 'remerge', filename+'.png')
+    cv2.imwrite(save_path, img)
 
 if __name__ == '__main__':
-    main()
+
+    #main()
+    patchify_and_unpatchify_test()

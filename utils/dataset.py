@@ -72,18 +72,25 @@ class Cropper(object):
 
     def pad_and_crop_images(self ,image, margin_color):
 
+        # TODO padding odd and even
         # should the value of border be equal to background ?
         # padding
         image_y, image_x = image.shape[:2]
         border_y = 0
         if image_y % self.size_y != 0:
-            border_y = (self.size_y - (image_y % self.size_y) + 1) // 2
-            image = cv2.copyMakeBorder(image, border_y, border_y, 0, 0, cv2.BORDER_CONSTANT, value=margin_color)
+            border_y_double = (self.size_y - (image_y % self.size_y))
+            if border_y_double % 2 == 0:
+                image = cv2.copyMakeBorder(image, border_y_double//2, border_y_double//2, 0, 0, cv2.BORDER_CONSTANT, value=margin_color)
+            else:
+                image = cv2.copyMakeBorder(image, border_y_double//2, border_y_double//2+1, 0, 0, cv2.BORDER_CONSTANT, value=margin_color)
             image_y = image.shape[0]
         border_x = 0
         if image_x % self.size_x != 0:
-            border_x = (self.size_x - (image_x % self.size_x) + 1) // 2
-            image = cv2.copyMakeBorder(image, 0, 0, border_x, border_x, cv2.BORDER_CONSTANT, value=margin_color)
+            border_x_double = (self.size_x - (image_x % self.size_x))
+            if border_x_double % 2 == 0:
+                image = cv2.copyMakeBorder(image, 0, 0, border_x_double//2, border_x_double//2, cv2.BORDER_CONSTANT, value=margin_color)
+            else:
+                image = cv2.copyMakeBorder(image, 0, 0, border_x_double//2, border_x_double//2+1, cv2.BORDER_CONSTANT, value=margin_color)
             image_x = image.shape[1]
 
         # calculate n_w and n_h
@@ -100,7 +107,8 @@ class Cropper(object):
                 patches.append(image[start_y:start_y + self.size_y, start_x:start_x + self.size_x])
                 start_x += self.step_x
             start_y += self.step_y
-        return patches, n_w, n_h
+
+        return patches, n_w, n_h, image_y, image_x
 
     def save_images(self, patches, save_path, father_name):
 
@@ -111,7 +119,7 @@ class Cropper(object):
 
         image = cv2.imread(image_path)
         filename = self.get_filename(image_path)
-        patches, n_w, n_h = self.pad_and_crop_images(image=image, margin_color=self.image_margin_color)
+        patches, n_w, n_h, image_h, image_w = self.pad_and_crop_images(image=image, margin_color=self.image_margin_color)
         # patches is saved in input_path/image_patches
         input_path = os.path.join(self.input_path, 'image_patches')
         self.save_images(patches, input_path, filename)
@@ -121,10 +129,10 @@ class Cropper(object):
                 'label_path is None'
             label = cv2.imread(label_path)
             label_filename = self.get_filename(label_path)
-            label_patches, _, _ = self.pad_and_crop_images(image=label, margin_color=self.label_margin_color)
+            label_patches, _, _, _, _ = self.pad_and_crop_images(image=label, margin_color=self.label_margin_color)
             # label_patches is saved in input_path/gt_patches
             input_path = os.path.join(self.input_path, 'gt_patches')
             self.save_images(label_patches, input_path, label_filename)
 
-        return patches, n_w, n_h
+        return patches, n_w, n_h, image_h, image_w
 
